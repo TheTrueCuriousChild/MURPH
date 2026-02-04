@@ -9,6 +9,7 @@ import { colors } from '../constants/theme';
 
 // Import screens
 import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import MyCoursesScreen from '../screens/MyCoursesScreen';
 import AIAssistantScreen from '../screens/AIAssistantScreen';
@@ -176,11 +177,18 @@ const AppNavigator = () => {
                 }}
             >
                 {!isAuthenticated ? (
-                    <Stack.Screen
-                        name="Login"
-                        component={LoginScreen}
-                        options={{ headerShown: false }}
-                    />
+                    <>
+                        <Stack.Screen
+                            name="Login"
+                            component={LoginScreen}
+                            options={{ headerShown: false }}
+                        />
+                        <Stack.Screen
+                            name="Signup"
+                            component={SignupScreen}
+                            options={{ headerShown: false }}
+                        />
+                    </>
                 ) : (
                     <>
                         {user?.role === 'teacher' ? (

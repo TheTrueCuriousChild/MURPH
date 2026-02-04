@@ -20,17 +20,15 @@ const LoginScreen = ({ navigation }) => {
     const [showPassword, setShowPassword] = useState(false);
     const { login } = useAuth();
 
-    const handleLogin = () => {
+    const handleLogin = async () => {
         if (!email || !password) {
             Alert.alert('Error', 'Please enter email and password');
             return;
         }
 
-        const success = login(email, password, role);
+        const success = await login(email, password, role);
         if (success) {
             // Navigation will be handled automatically by the navigation structure
-        } else {
-            Alert.alert('Error', 'Invalid credentials');
         }
     };
 
@@ -140,8 +138,15 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
 
                 {/* Demo Credentials */}
-                <View style={styles.demoContainer}>
+                {/* <View style={styles.demoContainer}>
                     <Text style={styles.demoText}>Demo: any email/password will work</Text>
+                </View> */}
+
+                <View style={styles.footer}>
+                    <Text style={styles.footerText}>Don't have an account? </Text>
+                    <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+                        <Text style={styles.linkText}>Sign Up</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </KeyboardAvoidingView>
