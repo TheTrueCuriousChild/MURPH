@@ -86,3 +86,24 @@ export const deleteCourse = async (req, res) => {
     return res.sendResponse(500, false, "Failed to delete course", { error: error.message });
   }
 };
+
+export const getAllCourses = async (req, res) => {
+  try {
+    const courses = await prisma.course.findMany({
+      include: {
+        teacher: {
+          select: {
+            username: true,
+            email: true,
+          },
+        },
+        _count: {
+          select: { lectures: true },
+        },
+      },
+    });
+    return res.sendResponse(200, true, "All courses fetched successfully", courses);
+  } catch (error) {
+    return res.sendResponse(500, false, "Failed to fetch courses", { error: error.message });
+  }
+};

@@ -20,6 +20,10 @@ app.use("/user", userRouter);
 app.use("/teacher", teacherRouter);
 app.use("/session", sessionRouter);
 
-app.listen(5000, () => {
+app.get("/", (req, res) => {
+    res.send("Hello World!");
+})
+
+app.listen(5000, "0.0.0.0", () => {
     console.log("Server is running on port 5000");
 })

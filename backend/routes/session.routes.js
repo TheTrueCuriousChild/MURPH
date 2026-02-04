@@ -4,6 +4,7 @@ import {
     pauseSession,
     resumeSession,
     endSession,
+    serveLectureVideo,
     getSession,
 } from "../controllers/session.controllers.js";
 import authMiddleware from "../middlewares/auth.js";
@@ -18,6 +19,7 @@ router.post("/start", startLectureSession);
 router.post("/:sessionId/pause", pauseSession);
 router.post("/:sessionId/resume", resumeSession);
 router.post("/:sessionId/end", endSession);
+router.get("/:sessionId/video", serveLectureVideo);
 router.get("/:sessionId", getSession);
 
 export default router;

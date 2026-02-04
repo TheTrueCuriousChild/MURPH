@@ -99,11 +99,27 @@ const teacherLogin = async (req, res) => {
     res.sendResponse(200, true, "Teacher login successful.")
 };
 
+const addFunds = async (req, res) => {
+    const { amount } = req.body;
+    const userEmail = req.user.email;
+
+    try {
+        const user = await prisma.user.update({
+            where: { email: userEmail },
+            data: { walletBalance: { increment: amount } }
+        });
+        res.sendResponse(200, true, `Added ${amount} to wallet`, user);
+    } catch (error) {
+        res.sendResponse(500, false, "Failed to add funds", { error: error.message });
+    }
+};
+
 export {
     userLogin,
     userLogout,
     userSignup,
     teacherLogin,
-    teacherSignup
+    teacherSignup,
+    addFunds
 };
 

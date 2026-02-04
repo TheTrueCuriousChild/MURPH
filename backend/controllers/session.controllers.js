@@ -1,6 +1,69 @@
 import prisma from "../utils/prisma.js";
 import { lockFunds, releaseAndDistributeFunds } from "../utils/wallet.service.js";
+import { getVideoStream } from "../utils/upload.js";
 
+/**
+ * Serve lecture video by generating a signed URL
+ * Only accessible if the user has an ACTIVE session for this lecture
+ */
+export const serveLectureVideo = async (req, res) => {
+    const { sessionId } = req.params;
+    const userEmail = req.user.email;
+
+    try {
+        const session = await prisma.viewingSession.findFirst({
+            where: {
+                id: sessionId,
+                userEmail,
+                status: "ACTIVE",
+            },
+            include: {
+                lecture: true,
+            },
+        });
+
+        if (!session) {
+            return res.sendResponse(403, false, "No active session found for this lecture");
+        }
+
+        const videoUrl = session.lecture.videoUrl;
+        console.log(`[DEBUG] Attempting to serve video with key/URL: ${videoUrl} for session: ${sessionId}`);
+
+        if (!videoUrl) {
+            return res.sendResponse(404, false, "Video content not found for this lecture");
+        }
+
+        // If it's a full URL, we can't fetch it from B2 as a key
+        if (videoUrl.startsWith("http")) {
+            console.log(`[DEBUG] Found external URL, returning directly: ${videoUrl}`);
+            return res.sendResponse(200, true, "External video URL returned", {
+                videoUrl: videoUrl,
+                type: "external"
+            });
+        }
+
+        // Get the video stream from the private bucket
+        const { stream, contentType, contentLength } = await getVideoStream(videoUrl);
+
+        // Set response headers for streaming
+        res.setHeader("Content-Type", contentType || "video/mp4");
+        if (contentLength) {
+            res.setHeader("Content-Length", contentLength);
+        }
+        res.setHeader("Accept-Ranges", "bytes");
+
+        // Pipe the stream directly to the response
+        stream.pipe(res);
+    } catch (error) {
+        console.error("Serve lecture video error:", error);
+        // If headers are already sent, we can't send a JSON response
+        if (!res.headersSent) {
+            return res.sendResponse(500, false, "Failed to serve lecture video", {
+                error: error.message,
+            });
+        }
+    }
+};
 
 /**
  * Start a new lecture viewing session
@@ -193,7 +256,11 @@ export const endSession = async (req, res) => {
                 userEmail,
             },
             include: {
-                lecture: true,
+                lecture: {
+                    include: {
+                        course: true,
+                    },
+                },
                 payment: true,
             },
         });
