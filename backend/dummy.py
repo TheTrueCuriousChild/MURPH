@@ -76,67 +76,25 @@ def simple_recommender(input_json):
 
 
 # ------------------------------
-# Only this part is new
+# File based input → output
 # ------------------------------
 if __name__ == "__main__":
 
-    dummy_input = {
-        "query": "i want to learn guitar basics",
-        "user": {
-            "user_id": "U101",
-            "age_bucket": 1,
-            "education_level": "college",
-            "degree": "mechanical engineering",
-            "year_of_study": 2,
-            "preferred_categories": ["music"],
-            "previous_sessions": ["S10"],
-            "previous_teachers": ["T1"]
-        },
-        "sessions": [
-            {
-                "session_id": "S10",
-                "title": "Guitar basics for absolute beginners",
-                "teacher_id": "T1",
-                "category": "music",
-                "difficulty": "beginner",
-                "price_per_min": 0.3,
-                "content_text": "This session teaches basic guitar chords, strumming patterns and finger positioning.",
-                "reviews": [
-                    {"rating": 5, "text": "Very clear explanation of chords"},
-                    {"rating": 4, "text": "Good beginner session"}
-                ]
-            },
-            {
-                "session_id": "S11",
-                "title": "Advanced guitar solo techniques",
-                "teacher_id": "T2",
-                "category": "music",
-                "difficulty": "advanced",
-                "price_per_min": 0.6,
-                "content_text": "Learn advanced guitar solos, scales and improvisation techniques.",
-                "reviews": [
-                    {"rating": 5, "text": "Great for experienced players"},
-                    {"rating": 4, "text": "Fast paced session"}
-                ]
-            },
-            {
-                "session_id": "S12",
-                "title": "Introduction to piano",
-                "teacher_id": "T3",
-                "category": "music",
-                "difficulty": "beginner",
-                "price_per_min": 0.25,
-                "content_text": "This session introduces piano basics and finger exercises.",
-                "reviews": [
-                    {"rating": 4, "text": "Nice introduction"},
-                    {"rating": 3, "text": "Could be more detailed"}
-                ]
-            }
-        ]
-    }
+    input_file = "input.json"
+    output_file = "output.json"
 
-    output = simple_recommender(dummy_input)
+    # Read input JSON from file
+    with open(input_file, "r", encoding="utf-8") as f:
+        input_json = json.load(f)
 
+    output = simple_recommender(input_json)
+
+    # Print to console
     print("\n========== Recommendation Output ==========\n")
     print(json.dumps(output, indent=2))
-    print("\n===========================================\n")
+
+    # Export to file
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    print(f"\nExported recommendation JSON to: {output_file}\n")

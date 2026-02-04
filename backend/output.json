@@ -1,0 +1,45 @@
+{
+  "query": "i want to learn guitar basics",
+  "user_id": "U101",
+  "results": [
+    {
+      "session_id": "S10",
+      "title": "Guitar basics for absolute beginners",
+      "teacher_id": "T1",
+      "price_per_min": 0.3,
+      "rank_score": 0.7367,
+      "debug": {
+        "text_score": 0.3333,
+        "avg_rating": 0.9,
+        "category_match": 1.0,
+        "teacher_bonus": 0.1
+      }
+    },
+    {
+      "session_id": "S12",
+      "title": "Introduction to piano",
+      "teacher_id": "T3",
+      "price_per_min": 0.25,
+      "rank_score": 0.5767,
+      "debug": {
+        "text_score": 0.3333,
+        "avg_rating": 0.7,
+        "category_match": 1.0,
+        "teacher_bonus": 0.0
+      }
+    },
+    {
+      "session_id": "S11",
+      "title": "Advanced guitar solo techniques",
+      "teacher_id": "T2",
+      "price_per_min": 0.6,
+      "rank_score": 0.5367,
+      "debug": {
+        "text_score": 0.3333,
+        "avg_rating": 0.9,
+        "category_match": 1.0,
+        "teacher_bonus": 0.0
+      }
+    }
+  ]
+}
