@@ -1,0 +1,93 @@
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model user {
+  username       String
+  email          String           @id
+  password       String
+  accesses       LectureAccess[]
+  viewingSessions ViewingSession[]
+}
+
+model teacher {
+  username String
+  email    String   @id
+  password String
+  courses  Course[]
+}
+
+model Course {
+  id           String    @id @default(uuid())
+  title        String
+  description  String
+  teacherEmail String
+  teacher      teacher   @relation(fields: [teacherEmail], references: [email])
+  lectures     Lecture[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Lecture {
+  id              String           @id @default(uuid())
+  title           String
+  videoUrl        String?
+  price           Float            @default(0.0)
+  pricePerMinute  Float            @default(0.0)
+  duration        Int              @default(0)
+  avgViewingTime  Int              @default(0)
+  courseId        String
+  course          Course           @relation(fields: [courseId], references: [id])
+  accesses        LectureAccess[]
+  viewingSessions ViewingSession[]
+  transcript      String?          @db.Text
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model LectureAccess {
+  id        String   @id @default(uuid())
+  userEmail String
+  user      user     @relation(fields: [userEmail], references: [email])
+  lectureId String
+  lecture   Lecture  @relation(fields: [lectureId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model ViewingSession {
+  id               String   @id @default(uuid())
+  userEmail        String
+  user             user     @relation(fields: [userEmail], references: [email])
+  lectureId        String
+  lecture          Lecture  @relation(fields: [lectureId], references: [id])
+  paymentIntentId  String?
+  status           String   @default("ACTIVE")
+  startedAt        DateTime @default(now())
+  currentTimestamp DateTime @default(now())
+  totalWatchTime   Int      @default(0)
+  payment          Payment?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Payment {
+  id                String         @id @default(uuid())
+  sessionId         String         @unique
+  session           ViewingSession @relation(fields: [sessionId], references: [id])
+  paymentIntentId   String
+  milestoneId       String?
+  amountLocked      Float
+  amountCharged     Float?
+  currency          String         @default("USDC")
+  status            String         @default("PENDING")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
