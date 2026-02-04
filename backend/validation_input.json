@@ -1,0 +1,16 @@
+{
+    "mode": "student_validation",
+    "student_features": {
+        "completion_ratio": 0.74,
+        "normalized_time_spent": 0.69,
+        "interaction_count": 7,
+        "active_ratio": 0.83,
+        "idle_ratio": 0.11,
+        "rating_given": 5,
+        "time_to_review_sec": 52,
+        "student_avg_completion": 0.66,
+        "student_extreme_ratio": 0.07,
+        "session_avg_completion": 0.61,
+        "session_avg_rating": 4.3
+    }
+}
