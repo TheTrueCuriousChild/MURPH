@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "teacher" ADD COLUMN     "walletBalance" DOUBLE PRECISION NOT NULL DEFAULT 0.0;
+
+-- AlterTable
+ALTER TABLE "user" ADD COLUMN     "lockedBalance" DOUBLE PRECISION NOT NULL DEFAULT 0.0,
+ADD COLUMN     "walletBalance" DOUBLE PRECISION NOT NULL DEFAULT 0.0;

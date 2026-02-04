@@ -1,5 +1,6 @@
 import axios from "axios";
 
+
 const FINTERNET_API_URL = "https://api.fmm.finternetlab.io/api/v1";
 const FINTERNET_API_KEY = process.env.FINTERNET_API_KEY || "sk_test_your_key";
 const SETTLEMENT_DESTINATION = process.env.SETTLEMENT_DESTINATION || "bank_account_123";
@@ -20,7 +21,7 @@ export const createPaymentIntent = async (amount, metadata = {}) => {
                 settlementMethod: "OFF_RAMP_MOCK",
                 settlementDestination: "bank_account_123",
                 metadata: {
-                    releaseType: "MILESTONE_LOCKED",
+                    "releaseType": "MILESTONE_LOCKED",
                     ...metadata,
                 },
             },

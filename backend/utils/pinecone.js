@@ -8,7 +8,7 @@ export const initPinecone = async () => {
   });
 };
 
-export const upsertEmbeddings = async (indexName, embeddings) => {
+export const upsertEmbeddings = async (embeddings) => {
   const index = pinecone.Index("ragdb");
 
   const vectors = embeddings.map((e, i) => ({
@@ -16,7 +16,7 @@ export const upsertEmbeddings = async (indexName, embeddings) => {
     values: e.embedding,
     metadata: { text: e.text },
   }));
-  
+
   await index.upsert({
     upsertRequest: {
       vectors,

@@ -1,5 +1,6 @@
 import prisma from "../utils/prisma.js";
-import { createPaymentIntent, createMilestone, completeMilestone, cancelPaymentIntent, getEscrow } from "../utils/finternet.service.js";
+import { lockFunds, releaseAndDistributeFunds } from "../utils/wallet.service.js";
+
 
 /**
  * Start a new lecture viewing session
@@ -41,40 +42,21 @@ export const startLectureSession = async (req, res) => {
         const estimatedAmount2 = durationMinutes * lecture.pricePerMinute;
         const lockAmount = Math.max(estimatedAmount1, estimatedAmount2);
 
-        // Create payment intent
-        const paymentIntent = await createPaymentIntent(lockAmount, {
-            userEmail,
-            lectureId,
-            lectureTitle: lecture.title,
-            courseTitle: lecture.course.title,
-            description: `Viewing session for ${lecture.title}`,
-        });
+        // Lock funds using custom wallet service
+        const lockResult = await lockFunds(userEmail, lockAmount);
 
-        if (!paymentIntent.success) {
-            return res.sendResponse(500, false, "Failed to create payment intent", {
-                error: paymentIntent.error,
+        if (!lockResult.success) {
+            return res.sendResponse(400, false, "Failed to lock funds", {
+                error: lockResult.message,
             });
         }
-
-        const paymentIntentId = paymentIntent.data?.data?.id;
-        if (!paymentIntentId) {
-            return res.sendResponse(500, false, "Invalid payment intent response");
-        }
-
-        // DEBUG: Check if escrow is created immediately
-        const escrowCheck = await getEscrow(paymentIntentId);
-        console.log("Immediate Escrow Check:", escrowCheck.success ? "Found" : "Not Found", escrowCheck.data || escrowCheck.error);
-
-
-        // Milestone will be created at the end of session for the exact amount
-        const milestoneId = null;
 
         // Create viewing session
         const session = await prisma.viewingSession.create({
             data: {
                 userEmail,
                 lectureId,
-                paymentIntentId,
+                paymentIntentId: "LOCAL_WALLET", // Mock ID for compatibility
                 status: "ACTIVE",
                 currentTimestamp: new Date(),
             },
@@ -84,8 +66,7 @@ export const startLectureSession = async (req, res) => {
         await prisma.payment.create({
             data: {
                 sessionId: session.id,
-                paymentIntentId,
-                milestoneId,
+                paymentIntentId: "LOCAL_WALLET",
                 amountLocked: lockAmount,
                 status: "LOCKED",
                 currency: "USDC",
@@ -95,8 +76,6 @@ export const startLectureSession = async (req, res) => {
         return res.sendResponse(200, true, "Session started successfully", {
             sessionId: session.id,
             lockAmount,
-            paymentIntentId,
-            milestoneId,
         });
     } catch (error) {
         console.error("Start session error:", error);
@@ -239,34 +218,17 @@ export const endSession = async (req, res) => {
         const watchMinutes = finalWatchTime / 60;
         const chargeAmount = watchMinutes * session.lecture.pricePerMinute;
 
-        // Create milestone for the actual charge amount
-        const milestone = await createMilestone(
-            session.paymentIntentId,
-            chargeAmount,
-            `Lecture viewing - ${session.lecture.title}`,
-            0 // Index 0 as it's the first/only milestone for this session
-        );
-
-        if (!milestone.success) {
-            return res.sendResponse(500, false, "Failed to create milestone", {
-                error: milestone.error,
-            });
-        }
-
-        const milestoneId = milestone.data?.data?.id;
-
-        // Complete the newly created milestone
-        const paymentResult = await completeMilestone(
-            session.paymentIntentId,
-            milestoneId,
+        // Distribute funds using custom wallet service
+        const distributionResult = await releaseAndDistributeFunds(
             userEmail,
-            `Watched ${finalWatchTime}s, charged ${chargeAmount.toFixed(2)} USDC`
+            session.lecture.course.teacherEmail,
+            session.payment.amountLocked,
+            chargeAmount
         );
 
-        if (!paymentResult.success) {
-            return res.sendResponse(500, false, "Failed to complete milestone", {
-                error: paymentResult.error,
-            });
+        if (!distributionResult.success) {
+            console.error("Failed to distribute funds:", distributionResult.message);
+            // Even if distribution fails, we should still try to end the session but log the error
         }
 
         // Update session
@@ -357,39 +319,5 @@ export const getSession = async (req, res) => {
     }
 };
 
-/**
- * Get session escrow details
- */
-export const getSessionEscrowDetails = async (req, res) => {
-    const { sessionId } = req.params;
-    const userEmail = req.user.email;
 
-    try {
-        const session = await prisma.viewingSession.findFirst({
-            where: {
-                id: sessionId,
-                userEmail,
-            },
-        });
-
-        if (!session) {
-            return res.sendResponse(404, false, "Session not found");
-        }
-
-        const escrowResult = await getEscrow(session.paymentIntentId);
-
-        if (!escrowResult.success) {
-            return res.sendResponse(500, false, "Failed to get escrow details", {
-                error: escrowResult.error,
-            });
-        }
-
-        return res.sendResponse(200, true, "Escrow details retrieved successfully", escrowResult.data);
-    } catch (error) {
-        console.error("Get session escrow error:", error);
-        return res.sendResponse(500, false, "Failed to get session escrow details", {
-            error: error.message,
-        });
-    }
-};
 

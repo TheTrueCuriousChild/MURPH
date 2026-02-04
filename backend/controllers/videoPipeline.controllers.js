@@ -3,6 +3,7 @@ import uploadFile from "../utils/upload.js";
 import { extractAudio } from "../utils/extractAudio.js";
 import { transcribeAudio } from "../utils/voice.js";
 import embedText from "../utils/embed.js";
+import { initPinecone, upsertEmbeddings } from "../utils/pinecone.js";
 import fs from "fs";
 
 export const uploadLecture = (req, res) => {
@@ -18,6 +19,10 @@ export const uploadLecture = (req, res) => {
       const audioUrl = `uploads/lectures/${req.file.filename}_audio.mp3`;
       const transcript = await transcribeAudio(audioUrl);
       const embeddings = await embedText(transcript);
+
+      // Initialize Pinecone and upsert embeddings
+      await initPinecone();
+      await upsertEmbeddings(embeddings);
 
       fs.unlinkSync(videoPath);
       fs.unlinkSync(audioPath);

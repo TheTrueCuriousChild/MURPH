@@ -13,15 +13,18 @@ model user {
   username       String
   email          String           @id
   password       String
+  walletBalance  Float            @default(0.0)
+  lockedBalance  Float            @default(0.0)
   accesses       LectureAccess[]
   viewingSessions ViewingSession[]
 }
 
 model teacher {
-  username String
-  email    String   @id
-  password String
-  courses  Course[]
+  username      String
+  email         String   @id
+  password      String
+  walletBalance Float    @default(0.0)
+  courses       Course[]
 }
 
 model Course {
