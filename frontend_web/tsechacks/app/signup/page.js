@@ -5,61 +5,41 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/UI/Button';
 import { HiUser, HiAcademicCap } from 'react-icons/hi2';
 
-import { API_URL } from '@/lib/config';
-
-export default function LoginPage() {
+export default function SignupPage() {
     const router = useRouter();
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('student'); // 'student' or 'teacher'
     const [loading, setLoading] = useState(false);
 
-    const handleLogin = async (e) => {
+    const handleSignup = async (e) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const endpoint = role === 'teacher' ? `${API_URL}/teacher/login` : `${API_URL}/user/login`;
+            const endpoint = role === 'teacher' ? 'http://192.168.32.226:5000/teacher/signup' : 'http://192.168.32.226:5000/user/signup';
+
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({ username, email, password }),
             });
 
             const data = await response.json();
 
             if (data.success) {
-                // Store role and token
-                if (typeof window !== 'undefined') {
-                    localStorage.setItem('userRole', role);
-                    localStorage.setItem('isAuthenticated', 'true');
-                    // Store token if available (teacher login returns it in data.token, user login might need update or rely on cookie if same domain, but here likely cross domain so cookie might not stick without credentials/proxy. 
-                    // However, we updated teacher controller to return token.
-                    if (data.data && data.data.token) {
-                        localStorage.setItem('accessToken', data.data.token);
-                    }
-
-                    // Also store user info if needed
-                    if (data.data) {
-                        const userData = role === 'teacher' ? data.data.teacher : data.data.user;
-                        if (userData) localStorage.setItem('userData', JSON.stringify(userData));
-                    }
-                }
-
-                // Route based on role
-                if (role === 'teacher') {
-                    router.push('/teacher/dashboard');
-                } else {
-                    router.push('/dashboard');
-                }
+                alert('Account created! Please sign in.');
+                router.push('/login');
             } else {
-                alert(data.message || 'Login failed');
+                alert(data.message || 'Signup failed');
             }
+
         } catch (error) {
-            console.error('Login error:', error);
-            alert('An error occurred during login');
+            console.error('Signup error:', error);
+            alert('An error occurred during signup');
         } finally {
             setLoading(false);
         }
@@ -70,12 +50,12 @@ export default function LoginPage() {
             <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
                 {/* Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-3xl font-bold text-secondary-900 mb-2">Welcome Back</h1>
-                    <p className="text-secondary-600">Sign in to continue learning</p>
+                    <h1 className="text-3xl font-bold text-secondary-900 mb-2">Create Account</h1>
+                    <p className="text-secondary-600">Join our learning community</p>
                 </div>
 
-                {/* Login Form */}
-                <form onSubmit={handleLogin} className="space-y-6">
+                {/* Signup Form */}
+                <form onSubmit={handleSignup} className="space-y-6">
                     {/* Role Selection */}
                     <div>
                         <label className="block text-sm font-medium text-secondary-700 mb-3">
@@ -118,6 +98,22 @@ export default function LoginPage() {
                         </div>
                     </div>
 
+                    {/* Username */}
+                    <div>
+                        <label htmlFor="username" className="block text-sm font-medium text-secondary-700 mb-2">
+                            UserName
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            placeholder="John Doe"
+                            required
+                        />
+                    </div>
+
                     {/* Email */}
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-2">
@@ -152,15 +148,15 @@ export default function LoginPage() {
 
                     {/* Submit Button */}
                     <Button type="submit" className="w-full" disabled={loading}>
-                        {loading ? 'Signing in...' : `Sign in as ${role === 'student' ? 'Student' : 'Teacher'}`}
+                        {loading ? 'Creating Account...' : 'Sign Up'}
                     </Button>
                 </form>
 
                 {/* Footer */}
                 <p className="text-center text-sm text-secondary-600 mt-6">
-                    Don't have an account?{' '}
-                    <a href="/signup" className="text-primary-600 hover:text-primary-700 font-medium">
-                        Sign up
+                    Already have an account?{' '}
+                    <a href="/login" className="text-primary-600 hover:text-primary-700 font-medium">
+                        Sign in
                     </a>
                 </p>
             </div>
