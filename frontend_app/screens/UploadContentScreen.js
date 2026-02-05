@@ -15,7 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { API_URL } from '../constants/config';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 
-const UploadContentScreen = ({ navigation }) => {
+const UploadContentScreen = ({ navigation, route }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [category, setCategory] = useState('');
@@ -26,6 +26,13 @@ const UploadContentScreen = ({ navigation }) => {
     const [videoFile, setVideoFile] = useState(null);
 
     const { token } = useAuth();
+
+    // Check for pre-selected course from navigation params
+    useEffect(() => {
+        if (route.params?.courseId) {
+            setSelectedCourse(route.params.courseId);
+        }
+    }, [route.params]);
 
     // Fetch courses on mount
     useEffect(() => {

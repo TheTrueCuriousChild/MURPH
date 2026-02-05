@@ -71,6 +71,13 @@ const TeacherMyCoursesScreen = ({ navigation }) => {
             <Text style={styles.courseDescription} numberOfLines={2}>
                 {item.description}
             </Text>
+            <TouchableOpacity
+                style={styles.viewDetailsButton}
+                onPress={() => navigation.navigate('TeacherCourseDetails', { courseId: item.id })}
+            >
+                <Text style={styles.viewDetailsText}>View Details</Text>
+                <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
         </View>
     );
 
@@ -181,6 +188,19 @@ const styles = StyleSheet.create({
     courseDescription: {
         ...typography.body2,
         color: colors.text,
+    },
+    viewDetailsButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        marginTop: spacing.sm,
+        paddingTop: spacing.xs,
+    },
+    viewDetailsText: {
+        ...typography.button,
+        color: colors.primary,
+        fontSize: 14,
+        marginRight: 4,
     },
     emptyContainer: {
         alignItems: 'center',

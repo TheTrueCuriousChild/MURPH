@@ -1,5 +1,5 @@
 import prisma from "../utils/prisma.js";
-import uploadFile from "../utils/upload.js";
+import uploadFile, { getSignedVideoUrl, getVideoStream } from "../utils/upload.js";
 import { extractAudio } from "../utils/extractAudio.js";
 import { transcribeAudio } from "../utils/voice.js";
 import embedText from "../utils/embed.js";
@@ -67,7 +67,23 @@ export const getCourseLectures = async (req, res) => {
         const lectures = await prisma.lecture.findMany({
             where: { courseId },
         });
-        return res.sendResponse(200, true, "Lectures fetched successfully", lectures);
+
+        // Generate signed URLs for each lecture
+        const lecturesWithUrls = await Promise.all(lectures.map(async (lecture) => {
+            if (lecture.videoUrl && !lecture.videoUrl.startsWith('http')) {
+                // Assuming it's a key, generate signed URL
+                try {
+                    const signedUrl = await getSignedVideoUrl(lecture.videoUrl);
+                    return { ...lecture, videoUrl: signedUrl };
+                } catch (e) {
+                    console.error(`Failed to sign URL for lecture ${lecture.id}:`, e);
+                    return lecture;
+                }
+            }
+            return lecture;
+        }));
+
+        return res.sendResponse(200, true, "Lectures fetched successfully", lecturesWithUrls);
     } catch (error) {
         return res.sendResponse(500, false, "Failed to fetch lectures", { error: error.message });
     }
@@ -103,5 +119,55 @@ export const deleteLecture = async (req, res) => {
         return res.sendResponse(200, true, "Lecture deleted successfully");
     } catch (error) {
         return res.sendResponse(500, false, "Failed to delete lecture", { error: error.message });
+    }
+};
+
+export const previewLecture = async (req, res) => {
+    const { id } = req.params;
+    const teacherId = req.user.userId;
+
+    try {
+        const lecture = await prisma.lecture.findUnique({
+            where: { id },
+            include: { course: true },
+        });
+
+        if (!lecture) {
+            return res.sendResponse(404, false, "Lecture not found");
+        }
+
+        // Verify ownership
+        if (lecture.course.teacherId !== teacherId) {
+            return res.sendResponse(403, false, "Unauthorized to preview this lecture");
+        }
+
+        const videoUrl = lecture.videoUrl;
+
+        if (!videoUrl) {
+            return res.sendResponse(404, false, "Video content not found");
+        }
+
+        if (videoUrl.startsWith("http")) {
+            return res.sendResponse(200, true, "External video URL", {
+                videoUrl: videoUrl,
+                type: "external"
+            });
+        }
+
+        // Stream from B2
+        const { stream, contentType, contentLength } = await getVideoStream(videoUrl);
+
+        res.setHeader("Content-Type", contentType || "video/mp4");
+        if (contentLength) {
+            res.setHeader("Content-Length", contentLength);
+        }
+        res.setHeader("Accept-Ranges", "bytes");
+
+        stream.pipe(res);
+    } catch (error) {
+        console.error("Preview lecture error:", error);
+        if (!res.headersSent) {
+            return res.sendResponse(500, false, "Failed to preview lecture", { error: error.message });
+        }
     }
 };

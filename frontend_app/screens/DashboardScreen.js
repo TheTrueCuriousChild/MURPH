@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,25 +9,53 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { courses } from '../constants/mockData';
 import { colors, typography, spacing, borderRadius } from '../constants/theme';
 import { getGreeting, formatCurrency, filterCourses } from '../utils/helpers';
 import BalanceCard from '../components/BalanceCard';
 import CourseCard from '../components/CourseCard';
 import SearchBar from '../components/SearchBar';
+import { API_URL } from '../constants/config';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.70;
 
 const DashboardScreen = ({ navigation }) => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
+    const [courses, setCourses] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const continueWatchingCourses = filterCourses(courses, 'in-progress');
-    const exploreCourses = courses.filter(c => !c.enrolled);
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const response = await fetch(`${API_URL}/user/courses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setCourses(data.data.map(c => ({
+                        ...c,
+                        instructor: c.teacher?.username || 'Instructor',
+                        totalSessions: c._count?.lectures || 0,
+                        thumbnail: 'https://via.placeholder.com/150', // Placeholder for now
+                        rating: 4.5,
+                        progress: 0
+                    })));
+                }
+            } catch (error) {
+                console.error('Fetch courses error:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (token) fetchCourses();
+    }, [token]);
+
+    const continueWatchingCourses = []; // Placeholder until session history is implemented
+    const exploreCourses = courses;
 
     const handleSearch = (searchText) => {
         console.log('Searching for:', searchText);
-        // Implement search functionality
     };
 
     return (
@@ -96,12 +124,7 @@ const DashboardScreen = ({ navigation }) => {
                                 <View key={course.id} style={styles.horizontalCard}>
                                     <CourseCard
                                         course={course}
-                                        onPress={() => navigation.navigate('VideoPlayer', {
-                                            videoParams: {
-                                                title: course.title,
-                                                source: 'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4'
-                                            }
-                                        })}
+                                        onPress={() => navigation.navigate('StudentCourseDetails', { courseId: course.id })}
                                         showProgress={true}
                                     />
                                 </View>
@@ -122,12 +145,7 @@ const DashboardScreen = ({ navigation }) => {
                         <CourseCard
                             key={course.id}
                             course={course}
-                            onPress={() => navigation.navigate('VideoPlayer', {
-                                videoParams: {
-                                    title: course.title,
-                                    source: 'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4'
-                                }
-                            })}
+                            onPress={() => navigation.navigate('StudentCourseDetails', { courseId: course.id })}
                         />
                     )}
                 </View>

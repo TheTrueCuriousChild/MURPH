@@ -4,13 +4,17 @@ const authMiddleware = (requiredRole) => {
     return (req, res, next) => {
         // DEBUG LOGGING
 
-        let token = req.cookies?.accessToken;
+        let token = null;
 
-        if (!token && req.headers.authorization) {
+        if (req.headers.authorization) {
             const authHeader = req.headers.authorization;
             if (authHeader.startsWith("Bearer ")) {
                 token = authHeader.substring(7, authHeader.length);
             }
+        }
+
+        if (!token && req.cookies?.accessToken) {
+            token = req.cookies.accessToken;
         }
 
 
