@@ -124,20 +124,35 @@ export const deleteLecture = async (req, res) => {
 
 export const previewLecture = async (req, res) => {
     const { id } = req.params;
-    const teacherId = req.user.userId;
+    const teacherEmail = req.user?.email;
+
+    console.log(`[Preview] Request for lecture: ${id}, TeacherEmail: ${teacherEmail}`);
 
     try {
+        const teacher = await prisma.teacher.findUnique({
+            where: { email: teacherEmail }
+        });
+
+        if (!teacher) {
+            console.log("[Preview] Teacher not found for email:", teacherEmail);
+            return res.sendResponse(404, false, "Teacher profile not found");
+        }
+
+        const teacherId = teacher.id;
+
         const lecture = await prisma.lecture.findUnique({
             where: { id },
             include: { course: true },
         });
 
         if (!lecture) {
+            console.log("[Preview] Lecture not found");
             return res.sendResponse(404, false, "Lecture not found");
         }
 
         // Verify ownership
         if (lecture.course.teacherId !== teacherId) {
+            console.log(`[Preview] Unauthorized. Owner: ${lecture.course.teacherId}, Requestor: ${teacherId}`);
             return res.sendResponse(403, false, "Unauthorized to preview this lecture");
         }
 
@@ -148,22 +163,20 @@ export const previewLecture = async (req, res) => {
         }
 
         if (videoUrl.startsWith("http")) {
-            return res.sendResponse(200, true, "External video URL", {
-                videoUrl: videoUrl,
-                type: "external"
-            });
+            console.log("[Preview] Redirecting to external URL");
+            return res.redirect(videoUrl);
         }
 
-        // Stream from B2
-        const { stream, contentType, contentLength } = await getVideoStream(videoUrl);
-
-        res.setHeader("Content-Type", contentType || "video/mp4");
-        if (contentLength) {
-            res.setHeader("Content-Length", contentLength);
+        // Generate Signed URL and Redirect
+        console.log("[Preview] Generating Signed URL for redirect...");
+        try {
+            const signedUrl = await getSignedVideoUrl(videoUrl, 3600); // 1 hour validity
+            console.log(`[Preview] Redirecting to signed URL: ${signedUrl.substring(0, 50)}...`);
+            return res.redirect(signedUrl);
+        } catch (signError) {
+            console.error("[Preview] Failed to sign URL:", signError);
+            return res.sendResponse(500, false, "Failed to generate video link");
         }
-        res.setHeader("Accept-Ranges", "bytes");
-
-        stream.pipe(res);
     } catch (error) {
         console.error("Preview lecture error:", error);
         if (!res.headersSent) {

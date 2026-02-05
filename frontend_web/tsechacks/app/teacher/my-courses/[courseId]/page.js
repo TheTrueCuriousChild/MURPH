@@ -19,11 +19,10 @@ export default function CourseDetailsPage() {
     const [streamUrl, setStreamUrl] = useState(null); // New state for video stream URL
 
     const handlePlayVideo = (lecture) => {
-        // Direct preview using the cookie for authentication
-        // Note: This relies on the browser sending the 'accessToken' cookie automatically.
-        // If cookies are not working, we might need to append ?token={token} to the URL
-        // but let's try standard cookie auth first as per authMiddleware.
-        const previewUrl = `${API_URL}/teacher/lectures/${lecture.id}/preview`;
+        // Direct preview using token in query param for reliability
+        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+        const previewUrl = `${API_URL}/teacher/lectures/${lecture.id}/preview?token=${token}`;
+        console.log("Playing Preview URL:", previewUrl);
         setStreamUrl(previewUrl);
         setSelectedLecture(lecture);
     };
@@ -196,12 +195,13 @@ export default function CourseDetailsPage() {
                                 <HiXMark className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="aspect-video w-full">
+                        <div className="aspect-video w-full bg-black flex items-center justify-center">
                             <video
-                                src={selectedLecture.videoUrl}
+                                src={streamUrl}
                                 controls
                                 autoPlay
-                                className="w-full h-full object-contain"
+                                className="w-full h-full"
+                                onError={(e) => console.error("Video playback error:", e.currentTarget.error)}
                             >
                                 <p>Your browser does not support the video tag.</p>
                             </video>

@@ -20,6 +20,11 @@ const authMiddleware = (requiredRole) => {
             token = req.cookies.accessToken;
         }
 
+        // Allow token via query param (useful for video streaming)
+        if (!token && req.query?.token) {
+            token = req.query.token;
+        }
+
         console.log("Extracted Token:", token ? "Found" : "Missing");
 
         if (!token) {
