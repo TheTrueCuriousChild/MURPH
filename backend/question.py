@@ -1,31 +1,47 @@
 import json
 import time
 import google.generativeai as genai
-from google.api_core.exceptions import ResourceExhausted, InvalidArgument
-
-# -------------------------------------------------------
-# Paste your API key here
-# -------------------------------------------------------
-
-API_KEY = "AIzaSyDriXVLBH5m0p6JknzC3CqkobQjoHSgpyg"
+from google.api_core.exceptions import ResourceExhausted
 
 
 # -------------------------------------------------------
-# Model configuration
+# API key
 # -------------------------------------------------------
 
-# Switching to flash-latest for better quota availability
-MODEL_NAME = "models/gemini-flash-latest"
+API_KEY = "AIzaSyCwjd-jx9yhCA7OTxliS7d7lZUH_rMT7ls"
 
 
 # -------------------------------------------------------
 # Gemini setup
 # -------------------------------------------------------
 
-if not API_KEY or API_KEY.startswith("PASTE"):
+if not API_KEY:
     raise RuntimeError("Please paste your Gemini API key in API_KEY")
 
 genai.configure(api_key=API_KEY)
+
+
+# -------------------------------------------------------
+# Pick a free / available model that supports generateContent
+# -------------------------------------------------------
+
+def pick_free_text_model():
+    usable = []
+
+    for m in genai.list_models():
+        if "generateContent" in m.supported_generation_methods:
+            usable.append(m.name)
+
+    if not usable:
+        raise RuntimeError("No generateContent-capable models available.")
+
+    # Prefer light / flash models if present
+    for name in usable:
+        lname = name.lower()
+        if "flash" in lname or "lite" in lname or "text" in lname:
+            return name
+
+    return usable[0]
 
 
 # -------------------------------------------------------
@@ -36,43 +52,36 @@ def build_prompt(lecture_json):
 
     lecture_text = lecture_json["lecture_text"]
 
-    prompt = f"""
-You are an educational question generation system.
-
-You are given the content of a single lecture.
-
-Your task:
-Generate exactly 6 questions WITH correct answers.
+    return f"""
+From the lecture text below, generate exactly 6 multiple-choice questions.
 
 Rules:
-- You MUST use only the information present in the lecture text.
-- You MUST NOT use any outside knowledge.
-- You MUST NOT introduce concepts not explicitly present in the lecture.
+- Use ONLY the given lecture text.
+- Do NOT use outside knowledge.
 - Questions must be ordered from easiest to hardest.
 - Each question must test a different concept.
-- Difficulty must increase gradually.
+- Each question must have exactly 4 options.
+- Exactly one option must be correct.
+- The correct answer must exactly match one option.
 
-Return ONLY valid JSON in the following structure.
+Return ONLY valid JSON in this format. Do not write any text outside JSON.
 
 {{
   "generated_questions": [
     {{
       "question_id": 1,
-      "difficulty": "easy | medium | hard",
+      "difficulty": "easy|medium|hard",
       "question": "...",
-      "answer": "...",
-      "answer_type": "short_text"
+      "options": ["...","...","...","..."],
+      "correct_answer": "...",
+      "answer_type": "mcq"
     }}
   ]
 }}
 
-Lecture text:
-\"\"\"
-{lecture_text}
-\"\"\"
+Lecture:
+\"\"\"{lecture_text}\"\"\"
 """
-
-    return prompt
 
 
 # -------------------------------------------------------
@@ -80,28 +89,35 @@ Lecture text:
 # -------------------------------------------------------
 
 def generate_questions(lecture_json):
-    model = genai.GenerativeModel(MODEL_NAME)
+
+    model_name = pick_free_text_model()
+    print("Using model:", model_name)
+
+    model = genai.GenerativeModel(model_name)
     prompt = build_prompt(lecture_json)
-    
-    max_retries = 5
-    base_delay = 10  # start with 10s wait
+
+    max_retries = 2
+    base_delay = 5
+    last_exception = None
 
     for attempt in range(max_retries):
         try:
             response = model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.3,
-                    "max_output_tokens": 8192
+                    "temperature": 0.2,
+
+                    # give enough room so the JSON is not cut
+                    "max_output_tokens": 2048,
+
+                    # force JSON mode (very important)
+                    "response_mime_type": "application/json"
                 }
             )
-            raw = response.text.strip()
-            
-            # Gemini sometimes wraps JSON in markdown
-            if raw.startswith("```"):
-                raw = raw.replace("```json", "")
-                raw = raw.replace("```", "").strip()
 
+            raw = response.text.strip()
+
+            # Now the model is required to return JSON only
             data = json.loads(raw)
 
             return {
@@ -110,16 +126,35 @@ def generate_questions(lecture_json):
                 "generated_questions": data["generated_questions"]
             }
 
-        except ResourceExhausted as e:
-            print(f"\\nQuota exceeded (Attempt {attempt+1}/{max_retries}). Waiting {base_delay}s...")
-            time.sleep(base_delay)
-            base_delay *= 2  # Exponential backoff
-            
-        except Exception as e:
-            print(f"\\nError during generation: {e}")
-            raise e
+        except json.JSONDecodeError as e:
+            # Most common cause: output was truncated
+            print("\nModel returned invalid / truncated JSON. Retrying once...")
+            last_exception = e
+            time.sleep(1)
 
-    raise RuntimeError("Max retries exceeded due to rate limits.")
+        except ResourceExhausted as e:
+            print(f"\nQuota exceeded (attempt {attempt + 1}/{max_retries}).")
+
+            retry_after = None
+            try:
+                retry_after = e.retry_delay.seconds
+            except Exception:
+                pass
+
+            last_exception = e
+
+            if retry_after:
+                time.sleep(retry_after)
+            else:
+                time.sleep(base_delay)
+
+        except Exception as e:
+            print("\nError during generation:", e)
+            raise
+
+    raise RuntimeError(
+        "Failed to obtain valid JSON from the model."
+    ) from last_exception
 
 
 # -------------------------------------------------------

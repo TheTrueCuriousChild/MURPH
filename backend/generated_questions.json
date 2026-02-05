@@ -5,44 +5,80 @@
     {
       "question_id": 1,
       "difficulty": "easy",
-      "question": "What type of mechanism are Transformer neural network architectures based on?",
-      "answer": "Self-attention mechanisms.",
-      "answer_type": "short_text"
+      "question": "Transformers are neural network architectures based on what mechanism?",
+      "options": [
+        "Recurrence mechanisms",
+        "Parallel attention layers",
+        "Self-attention mechanisms",
+        "Feed-forward layers"
+      ],
+      "correct_answer": "Self-attention mechanisms",
+      "answer_type": "mcq"
     },
     {
       "question_id": 2,
       "difficulty": "easy",
-      "question": "What structural element do Transformers replace recurrence with?",
-      "answer": "Parallel attention layers.",
-      "answer_type": "short_text"
+      "question": "What do Transformers replace with parallel attention layers?",
+      "options": [
+        "Embeddings",
+        "Recurrence",
+        "Residual connections",
+        "Layer normalization"
+      ],
+      "correct_answer": "Recurrence",
+      "answer_type": "mcq"
     },
     {
       "question_id": 3,
       "difficulty": "medium",
-      "question": "Name two of the main components included in the Transformer architecture.",
-      "answer": "Any two of: embeddings, positional encodings, multi-head self-attention, feed-forward layers, residual connections, or layer normalization.",
-      "answer_type": "short_text"
+      "question": "Which of the following is NOT listed as a main component of Transformers?",
+      "options": [
+        "Positional encodings",
+        "Multi-head self-attention",
+        "Convolutional layers",
+        "Layer normalization"
+      ],
+      "correct_answer": "Convolutional layers",
+      "answer_type": "mcq"
     },
     {
       "question_id": 4,
       "difficulty": "medium",
-      "question": "What are the three specific elements used by the attention mechanism to compute weighted combinations of token representations?",
-      "answer": "Queries, keys, and values.",
-      "answer_type": "short_text"
+      "question": "What does the attention mechanism compute?",
+      "options": [
+        "Recurrent sequences",
+        "Parallel attention layers",
+        "Weighted combinations of token representations",
+        "Feed-forward activations"
+      ],
+      "correct_answer": "Weighted combinations of token representations",
+      "answer_type": "mcq"
     },
     {
       "question_id": 5,
       "difficulty": "medium",
-      "question": "Besides self-attention, what other specific type of connection or layer is listed as a main component of the Transformer architecture?",
-      "answer": "Residual connections or layer normalization.",
-      "answer_type": "short_text"
+      "question": "The attention mechanism uses which of the following to compute weighted combinations of token representations?",
+      "options": [
+        "Embeddings, encodings, and layers",
+        "Queries, keys, and values",
+        "Residuals, norms, and feeds",
+        "Recurrence, parallel, and self"
+      ],
+      "correct_answer": "Queries, keys, and values",
+      "answer_type": "mcq"
     },
     {
       "question_id": 6,
       "difficulty": "hard",
-      "question": "What specific operation does the attention mechanism perform using queries, keys, and values?",
-      "answer": "It computes weighted combinations of token representations.",
-      "answer_type": "short_text"
+      "question": "Given that Transformers replace recurrence with parallel attention layers, what is a direct implication for their processing?",
+      "options": [
+        "They primarily rely on sequential data processing.",
+        "They can process parts of the input simultaneously.",
+        "They only use feed-forward networks.",
+        "They are limited to short sequences."
+      ],
+      "correct_answer": "They can process parts of the input simultaneously.",
+      "answer_type": "mcq"
     }
   ]
 }
