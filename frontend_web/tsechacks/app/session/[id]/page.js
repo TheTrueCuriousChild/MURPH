@@ -1,188 +1,166 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
-import DashboardLayout from '@/components/Layout/DashboardLayout';
-import SessionTimer from '@/components/Session/SessionTimer';
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import VideoPlayer from '@/components/Session/VideoPlayer';
-import Button from '@/components/UI/Button';
-import Modal from '@/components/UI/Modal';
-import { useSessionTimer } from '@/lib/hooks';
-import api, { MOCK_DATA } from '@/lib/api';
+import SessionTimer from '@/components/Session/SessionTimer';
+import DashboardLayout from '@/components/Layout/DashboardLayout';
+import { HiArrowLeft, HiCheckCircle } from 'react-icons/hi2';
+import { API_URL } from '@/lib/config';
 
-export default function SessionPage({ params }) {
+export default function SessionPage() {
+    const params = useParams();
     const router = useRouter();
-    const unwrappedParams = use(params);
-    const sessionId = parseInt(unwrappedParams.id);
-    const [session, setSession] = useState(null);
-    const [course, setCourse] = useState(null);
-    const [showFinishModal, setShowFinishModal] = useState(false);
-    const [lockedAmount, setLockedAmount] = useState(5.99);
+    const { id: sessionId } = params;
 
-    const { elapsedTime, isRunning, start, pause, stop } = useSessionTimer(0);
+    const [loading, setLoading] = useState(true);
+    const [sessionData, setSessionData] = useState(null);
+    const [ending, setEnding] = useState(false);
 
     useEffect(() => {
-        // Fetch session data
-        const sessionData = MOCK_DATA.sessions.find(s => s.id === sessionId);
-        setSession(sessionData);
+        const fetchSession = async () => {
+            try {
+                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        if (sessionData) {
-            const courseData = MOCK_DATA.courses.find(c => c.id === sessionData.courseId);
-            setCourse(courseData);
-            setLockedAmount(courseData?.pricePerSession || 5.99);
+                const response = await fetch(`${API_URL}/session/${sessionId}`, {
+                    headers: headers
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    setSessionData(data.data);
+                } else {
+                    // If session not found or invalid
+                    alert("Invalid Session");
+                    router.push('/dashboard');
+                }
+            } catch (error) {
+                console.error("Error fetching session:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (sessionId) {
+            fetchSession();
         }
-    }, [sessionId]);
+    }, [sessionId, router]);
 
-    const handleStartSession = async () => {
-        const result = await api.startSession(sessionId);
-        if (result.success) {
-            start();
+    const handleEndSession = async () => {
+        if (!confirm("Are you sure you want to end this session? This will finalize your payment.")) return;
+
+        setEnding(true);
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await fetch(`${API_URL}/session/${sessionId}/end`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                // Should ideally show a summary modal here, but resolving to back for now
+                router.push('/dashboard'); // Or viewing history
+            } else {
+                alert(data.message || "Failed to end session");
+            }
+        } catch (error) {
+            console.error("End session error:", error);
+        } finally {
+            setEnding(false);
         }
     };
 
-    const handleFinishSession = async () => {
-        const result = await api.finishSession(sessionId);
-        if (result.success) {
-            stop();
-            setShowFinishModal(false);
-            router.push('/dashboard');
-        }
-    };
-
-    if (!session || !course) {
+    if (loading) {
         return (
-            <DashboardLayout>
-                <div className="text-center py-12">Loading session...</div>
-            </DashboardLayout>
+            <div className="min-h-screen bg-secondary-50 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+            </div>
         );
     }
 
+    if (!sessionData) return null;
+
     return (
-        <DashboardLayout activeTab="dashboard">
-            <div className="max-w-7xl mx-auto">
-                {/* Breadcrumb */}
-                <div className="mb-4 text-sm text-secondary-600">
-                    <a href="/dashboard" className="hover:text-primary-600">Dashboard</a>
-                    <span className="mx-2">/</span>
-                    <a href={`/course/${course.id}`} className="hover:text-primary-600">{course.title}</a>
-                    <span className="mx-2">/</span>
-                    <span className="text-secondary-900">{session.title}</span>
+        <div className="min-h-screen bg-gray-900 text-white">
+            {/* Minimal Header for Focus Mode */}
+            <header className="bg-gray-800 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => router.back()}
+                        className="p-2 hover:bg-gray-700 rounded-full transition-colors text-gray-400 hover:text-white"
+                    >
+                        <HiArrowLeft className="w-5 h-5" />
+                    </button>
+                    <div>
+                        <h1 className="font-bold text-lg">{sessionData.lecture?.title || 'Lecture Session'}</h1>
+                        <p className="text-xs text-gray-400">{sessionData.lecture?.course?.title || 'Course'}</p>
+                    </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    {/* Main Content */}
-                    <div className="lg:col-span-2 space-y-4">
-                        {/* Session Timer */}
-                        <SessionTimer
-                            elapsedTime={elapsedTime}
-                            isRunning={isRunning}
-                            lockedAmount={lockedAmount}
-                        />
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-500/30 rounded-full">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span className="text-xs font-bold text-green-400 tracking-wide uppercase">Live Session</span>
+                    </div>
+                    {/* Timer could go here */}
+                </div>
+            </header>
 
-                        {/* Video Player */}
-                        <VideoPlayer
-                            videoUrl={session.videoUrl}
-                            onPlay={handleStartSession}
-                            onPause={pause}
-                        />
+            <main className="container mx-auto px-4 py-8 max-w-6xl">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Content - Video */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <VideoPlayer sessionId={sessionId} />
 
-                        {/* Session Info */}
-                        <div className="bg-white rounded-lg shadow-soft p-6">
-                            <h1 className="text-2xl font-bold text-secondary-900 mb-2">{session.title}</h1>
-                            <p className="text-secondary-600 mb-4">{course.title} • {course.instructor}</p>
+                        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                            <h2 className="text-xl font-bold mb-2">Description</h2>
+                            <p className="text-gray-300 leading-relaxed">
+                                {sessionData.lecture?.description || 'No description available.'}
+                            </p>
+                        </div>
+                    </div>
 
-                            {/* Actions */}
-                            <div className="flex gap-3">
-                                {!isRunning ? (
-                                    <Button variant="primary" onClick={handleStartSession}>
-                                        Start Session
-                                    </Button>
+                    {/* Sidebar - Controls & Status */}
+                    <div className="space-y-6">
+                        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                            <h3 className="font-bold text-gray-200 mb-4">Session Control</h3>
+
+                            <p className="text-sm text-gray-400 mb-6">
+                                You are currently paying
+                                <span className="text-white font-bold mx-1">${sessionData.lecture?.pricePerMinute}/min</span>
+                                for this session. Pause the video to pause billing.
+                            </p>
+
+                            <button
+                                onClick={handleEndSession}
+                                disabled={ending}
+                                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
+                            >
+                                {ending ? (
+                                    <span>Processing...</span>
                                 ) : (
                                     <>
-                                        <Button variant="secondary" onClick={pause}>
-                                            Pause
-                                        </Button>
-                                        <Button variant="danger" onClick={() => setShowFinishModal(true)}>
-                                            Finish Session
-                                        </Button>
+                                        <HiCheckCircle className="w-5 h-5" />
+                                        End Session & Pay
                                     </>
                                 )}
-                            </div>
-
-                            {/* Session Details */}
-                            <div className="mt-6 pt-6 border-t border-secondary-200">
-                                <h3 className="font-semibold text-secondary-900 mb-3">Session Details</h3>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-secondary-600">Duration</p>
-                                        <p className="font-medium text-secondary-900">{Math.floor(session.duration / 60)} minutes</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-secondary-600">Price</p>
-                                        <p className="font-medium text-secondary-900">${lockedAmount}</p>
-                                    </div>
-                                </div>
-                            </div>
+                            </button>
                         </div>
-                    </div>
 
-                    {/* Sidebar - Course Sessions */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-lg shadow-soft p-6 sticky top-6">
-                            <h3 className="font-semibold text-secondary-900 mb-4">Course Sessions</h3>
-                            <div className="space-y-2">
-                                {MOCK_DATA.sessions
-                                    .filter(s => s.courseId === course.id)
-                                    .map((s, index) => (
-                                        <button
-                                            key={s.id}
-                                            onClick={() => router.push(`/session/${s.id}`)}
-                                            className={`w-full text-left p-3 rounded-lg transition-colors ${s.id === sessionId
-                                                ? 'bg-primary-50 border border-primary-200'
-                                                : 'hover:bg-secondary-50'
-                                                }`}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${s.completed ? 'bg-success-100 text-success-700' : 'bg-secondary-100 text-secondary-600'
-                                                    }`}>
-                                                    {s.completed ? '✓' : index + 1}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-medium text-secondary-900 line-clamp-2">{s.title}</p>
-                                                    <p className="text-xs text-secondary-500 mt-1">{Math.floor(s.duration / 60)} min</p>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    ))}
-                            </div>
+                        {/* Q&A or Notes placeholder */}
+                        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700 opacity-50">
+                            <h3 className="font-bold text-gray-400 mb-2">Notes & Q&A</h3>
+                            <p className="text-sm text-gray-500">Coming soon...</p>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            {/* Finish Session Modal */}
-            <Modal
-                isOpen={showFinishModal}
-                onClose={() => setShowFinishModal(false)}
-                title="Finish Session"
-            >
-                <div className="space-y-4">
-                    <p className="text-secondary-700">
-                        Are you sure you want to finish this session? The locked amount of <strong>${lockedAmount}</strong> will be charged.
-                    </p>
-                    <div className="bg-secondary-50 p-4 rounded-lg">
-                        <p className="text-sm text-secondary-600">Time spent: {Math.floor(elapsedTime / 60)} minutes</p>
-                    </div>
-                    <div className="flex gap-3 justify-end">
-                        <Button variant="secondary" onClick={() => setShowFinishModal(false)}>
-                            Cancel
-                        </Button>
-                        <Button variant="success" onClick={handleFinishSession}>
-                            Confirm & Finish
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
-        </DashboardLayout>
+            </main>
+        </div>
     );
 }

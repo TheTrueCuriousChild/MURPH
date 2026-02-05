@@ -1,22 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { HiCloudArrowUp, HiX } from 'react-icons/hi2';
+import { HiCloudArrowUp, HiXMark } from 'react-icons/hi2';
+import { API_URL } from '@/lib/config';
 
 export default function VideoUploadForm() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
+    const [courses, setCourses] = useState([]);
+
+    // Separate state for file inputs to handle them properly
     const [formData, setFormData] = useState({
         title: '',
         description: '',
         pricePerMinute: '',
         category: '',
+        courseId: '',
         tags: '',
         videoFile: null,
         thumbnailFile: null
     });
+
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+                const headers = { 'Content-Type': 'application/json' };
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const response = await fetch(`${API_URL}/teacher/courses`, {
+                    headers: headers
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setCourses(data.data);
+                }
+            } catch (error) {
+                console.error('Fetch courses error:', error);
+            }
+        };
+        fetchCourses();
+    }, []);
 
     const handleDrag = (e) => {
         e.preventDefault();
@@ -45,15 +71,63 @@ export default function VideoUploadForm() {
         }
     };
 
+    const removeFile = (field) => {
+        setFormData({ ...formData, [field]: null });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
-        // Simulate upload
-        setTimeout(() => {
+        try {
+            const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+
+            const data = new FormData();
+            data.append('title', formData.title);
+            data.append('description', formData.description);
+            data.append('pricePerMinute', formData.pricePerMinute);
+            data.append('category', formData.category);
+            data.append('courseId', formData.courseId);
+            data.append('tags', formData.tags);
+
+            if (formData.videoFile) {
+                // 'lecture' is the field name expected by the backend
+                data.append('lecture', formData.videoFile);
+            } else {
+                alert('Please select a video file');
+                setLoading(false);
+                return;
+            }
+
+            // If thumbnail is supported by backend later
+            if (formData.thumbnailFile) {
+                data.append('thumbnail', formData.thumbnailFile);
+            }
+
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            // Do NOT set Content-Type for FormData, browser sets it with boundary
+
+            const response = await fetch(`${API_URL}/teacher/lectures`, {
+                method: 'POST',
+                headers: headers,
+                body: data,
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Video uploaded successfully!');
+                router.push('/teacher/my-courses');
+            } else {
+                alert(result.message || 'Upload failed');
+            }
+        } catch (error) {
+            console.error('Upload Error:', error);
+            alert('An error occurred during upload');
+        } finally {
             setLoading(false);
-            router.push('/teacher/videos');
-        }, 2000);
+        }
     };
 
     return (
@@ -76,28 +150,33 @@ export default function VideoUploadForm() {
                 />
 
                 {formData.videoFile ? (
-                    <div className="flex flex-col items-center">
-                        <div className="w-16 h-16 bg-success-100 text-success-600 rounded-full flex items-center justify-center mb-3">
-                            <HiCloudArrowUp className="w-8 h-8" />
+                    <div className="bg-primary-50 p-4 rounded-lg inline-flex items-center gap-3">
+                        <div className="bg-white p-2 rounded shadow-sm">
+                            <HiCloudArrowUp className="w-6 h-6 text-primary-600" />
                         </div>
-                        <p className="font-medium text-success-700">{formData.videoFile.name}</p>
-                        <p className="text-sm text-secondary-500">{(formData.videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        <div className="text-left">
+                            <p className="font-medium text-primary-900">{formData.videoFile.name}</p>
+                            <p className="text-xs text-primary-600">{(formData.videoFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        </div>
                         <button
                             type="button"
-                            onClick={(e) => { e.preventDefault(); setFormData({ ...formData, videoFile: null }) }}
-                            className="mt-4 text-sm text-error-600 hover:underline z-10 relative"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                removeFile('videoFile');
+                            }}
+                            className="p-1 hover:bg-white rounded-full transition-colors z-10"
                         >
-                            Remove file
+                            <HiXMark className="w-4 h-4 text-primary-500" />
                         </button>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center pointer-events-none">
-                        <div className="w-16 h-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center mb-4">
-                            <HiCloudArrowUp className="w-8 h-8" />
+                    <div className="space-y-2 pointer-events-none">
+                        <div className="w-12 h-12 bg-secondary-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <HiCloudArrowUp className="w-6 h-6 text-secondary-500" />
                         </div>
-                        <h3 className="text-lg font-medium text-secondary-900 mb-1">Drag & Drop Video Here</h3>
-                        <p className="text-secondary-500 mb-4">or click to browse files</p>
-                        <p className="text-xs text-secondary-400">MP4, WebM up to 2GB</p>
+                        <h3 className="text-lg font-bold text-secondary-900">Upload Video File</h3>
+                        <p className="text-secondary-500">Drag and drop your video file here, or click to browse</p>
+                        <p className="text-xs text-secondary-400 mt-2">MP4, MOV, or WebM (Max 500MB)</p>
                     </div>
                 )}
             </div>
@@ -106,90 +185,97 @@ export default function VideoUploadForm() {
                 {/* Left Column: Details */}
                 <div className="lg:col-span-2 space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-secondary-700 mb-2">Title</label>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Select Course <span className="text-red-500">*</span></label>
+                        <select
+                            name="courseId"
+                            value={formData.courseId}
+                            onChange={handleChange}
+                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                            required
+                        >
+                            <option value="">-- Choose a Course --</option>
+                            {courses.map(course => (
+                                <option key={course.id} value={course.id}>{course.title}</option>
+                            ))}
+                        </select>
+                        <p className="text-xs text-secondary-500 mt-1">Video will be added to this course.</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Title <span className="text-red-500">*</span></label>
                         <input
                             type="text"
                             name="title"
                             value={formData.title}
                             onChange={handleChange}
-                            placeholder="e.g. Introduction to React Hooks"
+                            placeholder="e.g. Introduction to UI Design"
                             className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-secondary-700 mb-2">Description</label>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Description <span className="text-red-500">*</span></label>
                         <textarea
                             name="description"
                             value={formData.description}
                             onChange={handleChange}
-                            placeholder="What will students learn in this video?"
-                            rows="5"
-                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                            rows="4"
+                            placeholder="Describe what students will learn..."
+                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none resize-none"
                             required
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-secondary-700 mb-2">Category</label>
-                            <select
-                                name="category"
-                                value={formData.category}
-                                onChange={handleChange}
-                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                                required
-                            >
-                                <option value="">Select Category</option>
-                                <option value="web-dev">Web Development</option>
-                                <option value="data-science">Data Science</option>
-                                <option value="design">Design</option>
-                                <option value="business">Business</option>
-                            </select>
-                        </div>
-
-                        {/* <div>
-                            <label className="block text-sm font-medium text-secondary-700 mb-2">Tags</label>
-                            <input
-                                type="text"
-                                name="tags"
-                                value={formData.tags}
-                                onChange={handleChange}
-                                placeholder="react, coding, web (comma separated)"
-                                className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
-                            />
-                        </div>*/}
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Tags</label>
+                        <input
+                            type="text"
+                            name="tags"
+                            value={formData.tags}
+                            onChange={handleChange}
+                            placeholder="e.g. design, beginner, theory (comma separated)"
+                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        />
                     </div>
                 </div>
 
-                {/* Right Column: Pricing & Thumbnail */}
+                {/* Right Column: Settings & Price */}
                 <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-xl border border-secondary-200">
-                        <h3 className="font-medium text-secondary-900 mb-4">Pricing</h3>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Category</label>
+                        <input
+                            type="text"
+                            name="category"
+                            value={formData.category}
+                            onChange={handleChange}
+                            placeholder="e.g. Design"
+                            className="w-full px-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        />
+                    </div>
 
-                        <label className="block text-xs font-medium text-secondary-700 mb-1">Price per Minute (₹)</label>
+                    <div>
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Price per Minute ($) <span className="text-red-500">*</span></label>
                         <div className="relative">
-                            <span className="absolute left-3 top-2 text-secondary-500">₹</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-500">$</span>
                             <input
                                 type="number"
                                 name="pricePerMinute"
                                 value={formData.pricePerMinute}
                                 onChange={handleChange}
-                                placeholder="e.g. 5"
-                                className="w-full pl-8 pr-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                                placeholder="0.00"
+                                className="w-full pl-7 pr-4 py-2 border border-secondary-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                                step="0.01"
+                                min="0"
                                 required
-                                min="1"
                             />
                         </div>
-                        <p className="text-xs text-secondary-500 mt-2">
-                            Students will be charged this amount for every minute they watch.
-                        </p>
+                        <p className="text-xs text-secondary-500 mt-1">Students pay based on watch time.</p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-xl border border-secondary-200">
-                        <h3 className="font-medium text-secondary-900 mb-4">Thumbnail</h3>
-                        <div className="border border-dashed border-secondary-300 rounded-lg p-4 text-center">
+                    <div className="pt-4 border-t border-secondary-200">
+                        <label className="block text-sm font-medium text-secondary-700 mb-2">Thumbnail</label>
+                        <div className="border border-dashed border-secondary-300 rounded-lg p-4 hover:bg-secondary-50 transition-colors text-center cursor-pointer">
                             <input
                                 type="file"
                                 name="thumbnailFile"
@@ -198,34 +284,29 @@ export default function VideoUploadForm() {
                                 className="hidden"
                                 id="thumbnail-upload"
                             />
-                            <label htmlFor="thumbnail-upload" className="cursor-pointer">
-                                {formData.thumbnailFile ? (
-                                    <div className="text-success-600 text-sm font-medium truncate">
-                                        {formData.thumbnailFile.name}
-                                    </div>
-                                ) : (
-                                    <span className="text-primary-600 text-sm font-medium hover:underline">
-                                        Upload Image
-                                    </span>
-                                )}
+                            <label htmlFor="thumbnail-upload" className="cursor-pointer block">
+                                <span className="text-secondary-600 text-sm">Upload Image</span>
                             </label>
                         </div>
+                        {formData.thumbnailFile && (
+                            <p className="text-xs text-secondary-600 mt-1 truncate">{formData.thumbnailFile.name}</p>
+                        )}
                     </div>
                 </div>
             </div>
 
-            <div className="flex justify-end pt-6 border-t border-secondary-200">
+            <div className="flex justify-end gap-3 pt-6 border-t border-secondary-200">
                 <button
                     type="button"
                     onClick={() => router.back()}
-                    className="px-6 py-2 text-secondary-600 font-medium hover:bg-secondary-50 rounded-lg mr-4 transition-colors"
+                    className="px-6 py-2 border border-secondary-300 rounded-lg text-secondary-700 font-medium hover:bg-secondary-50 transition-colors"
                 >
                     Cancel
                 </button>
                 <button
                     type="submit"
-                    disabled={loading || !formData.videoFile}
-                    className={`px-8 py-2 bg-primary-600 text-white rounded-lg font-medium shadow-sm transition-all ${loading || !formData.videoFile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-700 hover:shadow'
+                    disabled={loading}
+                    className={`px-8 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg font-medium shadow-lg shadow-primary-500/30 hover:shadow-primary-500/40 transform hover:-translate-y-0.5 transition-all ${loading ? 'opacity-70 cursor-not-allowed transform-none' : ''
                         }`}
                 >
                     {loading ? 'Uploading...' : 'Publish Video'}

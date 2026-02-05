@@ -24,6 +24,8 @@ import TeacherWalletScreen from '../screens/TeacherWalletScreen';
 import TeacherProfileScreen from '../screens/TeacherProfileScreen';
 import UploadContentScreen from '../screens/UploadContentScreen';
 import VideoPlayerScreen from '../screens/VideoPlayerScreen';
+import CreateCourseScreen from '../screens/CreateCourseScreen';
+import TeacherMyCoursesScreen from '../screens/TeacherMyCoursesScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -147,6 +149,11 @@ const TeacherTabNavigator = () => {
                 options={{ title: 'Dashboard' }}
             />
             <Tab.Screen
+                name="TeacherCourses"
+                component={TeacherMyCoursesScreen}
+                options={{ title: 'My Courses' }}
+            />
+            <Tab.Screen
                 name="MyVideos"
                 component={TeacherMyVideosScreen}
                 options={{ title: 'My Videos' }}
@@ -225,6 +232,13 @@ const AppNavigator = () => {
                             component={UploadContentScreen}
                             options={{
                                 title: 'Upload Content',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="CreateCourse"
+                            component={CreateCourseScreen}
+                            options={{
+                                title: 'Create Course',
                             }}
                         />
                         <Stack.Screen

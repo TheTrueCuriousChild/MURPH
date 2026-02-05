@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { HiHome, HiVideoCamera, HiCloudArrowUp, HiWallet, HiChevronLeft, HiChevronRight, HiArrowRightOnRectangle } from 'react-icons/hi2';
+import { HiHome, HiVideoCamera, HiCloudArrowUp, HiWallet, HiChevronLeft, HiChevronRight, HiArrowRightOnRectangle, HiBookOpen } from 'react-icons/hi2';
 import { IoSparkles } from 'react-icons/io5';
 
 export default function TeacherSidebar({ activeTab }) {
@@ -12,6 +12,7 @@ export default function TeacherSidebar({ activeTab }) {
 
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: HiHome, href: '/teacher/dashboard' },
+        { id: 'courses', label: 'My Courses', icon: HiBookOpen, href: '/teacher/my-courses' },
         { id: 'videos', label: 'My Videos', icon: HiVideoCamera, href: '/teacher/videos' },
         { id: 'upload', label: 'Upload Content', icon: HiCloudArrowUp, href: '/teacher/upload' },
         { id: 'wallet', label: 'Wallet', icon: HiWallet, href: '/teacher/wallet' },

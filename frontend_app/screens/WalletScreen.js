@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -7,34 +7,77 @@ import {
     ScrollView,
     StyleSheet,
     Alert,
+    FlatList,
+    Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
-import { transactions as initialTransactions } from '../constants/mockData';
 import { colors, typography, spacing, borderRadius, shadows } from '../constants/theme';
 import { formatCurrency, filterTransactions } from '../utils/helpers';
 import BalanceCard from '../components/BalanceCard';
 import TransactionItem from '../components/TransactionItem';
+import { API_URL } from '../constants/config';
+import { transactions as initialTransactions } from '../constants/mockData';
 
 const WalletScreen = () => {
-    const { user } = useAuth();
-    const [amount, setAmount] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('card');
-    const [transactionFilter, setTransactionFilter] = useState('all');
+    const { user, token, setUser } = useAuth();
+    const [balance, setBalance] = useState(user?.walletBalance || 0);
     const [transactions] = useState(initialTransactions);
+    const [isAddFundsVisible, setIsAddFundsVisible] = useState(false);
+    const [amountToAdd, setAmountToAdd] = useState('');
+    const [loading, setLoading] = useState(false);
 
+    // UI state
+    const [transactionFilter, setTransactionFilter] = useState('all');
+    const [paymentMethod, setPaymentMethod] = useState('card');
     const quickAmounts = [100, 250, 500, 1000];
 
-    const handleAddFunds = () => {
-        if (!amount || parseFloat(amount) <= 0) {
-            Alert.alert('Error', 'Please enter a valid amount');
+    useEffect(() => {
+        if (user?.walletBalance !== undefined) {
+            setBalance(user.walletBalance);
+        }
+    }, [user]);
+
+    const handleAddFunds = async () => {
+        if (!amountToAdd || isNaN(amountToAdd) || Number(amountToAdd) <= 0) {
+            Alert.alert('Invalid Amount', 'Please enter a valid positive amount');
             return;
         }
-        Alert.alert(
-            'Success',
-            `₹${amount} has been added to your wallet via ${paymentMethod === 'card' ? 'Credit Card' : 'UPI'}`,
-            [{ text: 'OK', onPress: () => setAmount('') }]
-        );
+
+        setLoading(true);
+        try {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const response = await fetch(`${API_URL}/user/add-funds`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({ amount: Number(amountToAdd) }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                Alert.alert('Success', `Successfully added ₹${amountToAdd}`);
+                setAmountToAdd('');
+                setIsAddFundsVisible(false);
+
+                // Update local state and context
+                if (data.data && data.data.walletBalance !== undefined) {
+                    setBalance(data.data.walletBalance);
+                    setUser({ ...user, walletBalance: data.data.walletBalance });
+                }
+            } else {
+                Alert.alert('Error', data.message || 'Failed to add funds');
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Network error. Please try again.');
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const FilterButton = ({ label, value, count }) => (
@@ -59,152 +102,186 @@ const WalletScreen = () => {
     const filteredTransactions = filterTransactions(transactions, transactionFilter);
 
     return (
-        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            {/* Balance Cards */}
-            <View style={styles.balanceContainer}>
-                <BalanceCard
-                    icon="wallet"
-                    label="Total Balance"
-                    value={formatCurrency(user?.totalBalance || 0)}
-                    color={colors.primary}
-                />
-                <BalanceCard
-                    icon="cash"
-                    label="Available"
-                    value={formatCurrency(user?.availableBalance || 0)}
-                    color={colors.success}
-                />
-                <BalanceCard
-                    icon="lock-closed"
-                    label="Locked"
-                    value={formatCurrency(user?.lockedAmount || 0)}
-                    color={colors.warning}
-                />
-            </View>
-
-            {/* Add Funds Card */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <Ionicons name="add-circle" size={24} color={colors.primary} />
-                    <Text style={styles.cardTitle}>Add Funds</Text>
-                </View>
-
-                <Text style={styles.label}>Enter Amount</Text>
-                <TextInput
-                    style={styles.amountInput}
-                    placeholder="0.00"
-                    value={amount}
-                    onChangeText={setAmount}
-                    keyboardType="decimal-pad"
-                    placeholderTextColor={colors.textLight}
-                />
-
-                <Text style={styles.label}>Quick Select</Text>
-                <View style={styles.quickAmounts}>
-                    {quickAmounts.map((quickAmount) => (
-                        <TouchableOpacity
-                            key={quickAmount}
-                            style={styles.quickButton}
-                            onPress={() => setAmount(quickAmount.toString())}
-                        >
-                            <Text style={styles.quickButtonText}>₹{quickAmount}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                <Text style={styles.label}>Payment Method</Text>
-                <View style={styles.paymentMethods}>
-                    <TouchableOpacity
-                        style={[
-                            styles.paymentButton,
-                            paymentMethod === 'card' && styles.paymentButtonActive,
-                        ]}
-                        onPress={() => setPaymentMethod('card')}
-                    >
-                        <Ionicons
-                            name="card"
-                            size={20}
-                            color={paymentMethod === 'card' ? colors.textWhite : colors.primary}
-                        />
-                        <Text
-                            style={[
-                                styles.paymentButtonText,
-                                paymentMethod === 'card' && styles.paymentButtonTextActive,
-                            ]}
-                        >
-                            Card
-                        </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                        style={[
-                            styles.paymentButton,
-                            paymentMethod === 'upi' && styles.paymentButtonActive,
-                        ]}
-                        onPress={() => setPaymentMethod('upi')}
-                    >
-                        <Ionicons
-                            name="phone-portrait"
-                            size={20}
-                            color={paymentMethod === 'upi' ? colors.textWhite : colors.primary}
-                        />
-                        <Text
-                            style={[
-                                styles.paymentButtonText,
-                                paymentMethod === 'upi' && styles.paymentButtonTextActive,
-                            ]}
-                        >
-                            UPI
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity style={styles.addButton} onPress={handleAddFunds}>
-                    <Text style={styles.addButtonText}>Add Amount</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Transaction History */}
-            <View style={styles.card}>
-                <View style={styles.cardHeader}>
-                    <Ionicons name="time" size={24} color={colors.primary} />
-                    <Text style={styles.cardTitle}>Transaction History</Text>
-                </View>
-
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.filtersContainer}
-                >
-                    <FilterButton
-                        label="All"
-                        value="all"
-                        count={transactions.length}
+        <View style={styles.container}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+                {/* Balance Cards */}
+                <View style={styles.balanceContainer}>
+                    <BalanceCard
+                        icon="wallet"
+                        label="Total Balance"
+                        value={formatCurrency(balance)}
+                        color={colors.primary}
                     />
-                    <FilterButton
-                        label="Credit"
-                        value="credit"
-                        count={transactions.filter(t => t.type === 'credit').length}
+                    <BalanceCard
+                        icon="cash"
+                        label="Available"
+                        value={formatCurrency(user?.availableBalance || 0)}
+                        color={colors.success}
                     />
-                    <FilterButton
-                        label="Debit"
-                        value="debit"
-                        count={transactions.filter(t => t.type === 'debit').length}
-                    />
-                    <FilterButton
+                    <BalanceCard
+                        icon="lock-closed"
                         label="Locked"
-                        value="locked"
-                        count={transactions.filter(t => t.type === 'locked').length}
+                        value={formatCurrency(user?.lockedAmount || 0)}
+                        color={colors.warning}
                     />
-                </ScrollView>
-
-                <View style={styles.transactionsList}>
-                    {filteredTransactions.map((transaction) => (
-                        <TransactionItem key={transaction.id} transaction={transaction} />
-                    ))}
                 </View>
-            </View>
-        </ScrollView>
+
+                {/* Add Funds Button Section */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Ionicons name="card" size={24} color={colors.primary} />
+                        <Text style={styles.cardTitle}>Manage Funds</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={styles.addFundsMainButton}
+                        onPress={() => setIsAddFundsVisible(true)}
+                    >
+                        <Ionicons name="add-circle" size={24} color={colors.textWhite} />
+                        <Text style={styles.addFundsMainButtonText}>Add Funds to Wallet</Text>
+                    </TouchableOpacity>
+                </View>
+
+                {/* Transaction History */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Ionicons name="time" size={24} color={colors.primary} />
+                        <Text style={styles.cardTitle}>Transaction History</Text>
+                    </View>
+
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.filtersContainer}
+                    >
+                        <FilterButton
+                            label="All"
+                            value="all"
+                            count={transactions.length}
+                        />
+                        <FilterButton
+                            label="Credit"
+                            value="credit"
+                            count={transactions.filter(t => t.type === 'credit').length}
+                        />
+                        <FilterButton
+                            label="Debit"
+                            value="debit"
+                            count={transactions.filter(t => t.type === 'debit').length}
+                        />
+                        <FilterButton
+                            label="Locked"
+                            value="locked"
+                            count={transactions.filter(t => t.type === 'locked').length}
+                        />
+                    </ScrollView>
+
+                    <View style={styles.transactionsList}>
+                        {filteredTransactions.map((transaction) => (
+                            <TransactionItem key={transaction.id} transaction={transaction} />
+                        ))}
+                        {filteredTransactions.length === 0 && (
+                            <Text style={{ textAlign: 'center', color: colors.textLight, padding: 20 }}>
+                                No transactions found
+                            </Text>
+                        )}
+                    </View>
+                </View>
+            </ScrollView>
+
+            {/* Add Funds Modal */}
+            <Modal
+                transparent={true}
+                visible={isAddFundsVisible}
+                animationType="slide"
+                onRequestClose={() => setIsAddFundsVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Add Funds</Text>
+
+                        <Text style={styles.label}>Enter Amount</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="0.00"
+                            placeholderTextColor={colors.textLight}
+                            keyboardType="decimal-pad"
+                            value={amountToAdd}
+                            onChangeText={setAmountToAdd}
+                        />
+
+                        <Text style={styles.label}>Quick Select</Text>
+                        <View style={styles.quickAmounts}>
+                            {quickAmounts.map((amt) => (
+                                <TouchableOpacity
+                                    key={amt}
+                                    style={styles.quickButton}
+                                    onPress={() => setAmountToAdd(amt.toString())}
+                                >
+                                    <Text style={styles.quickButtonText}>₹{amt}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+
+                        <Text style={styles.label}>Payment Method</Text>
+                        <View style={styles.paymentMethods}>
+                            <TouchableOpacity
+                                style={[
+                                    styles.paymentButton,
+                                    paymentMethod === 'card' && styles.paymentButtonActive,
+                                ]}
+                                onPress={() => setPaymentMethod('card')}
+                            >
+                                <Ionicons
+                                    name="card"
+                                    size={20}
+                                    color={paymentMethod === 'card' ? colors.textWhite : colors.primary}
+                                />
+                                <Text style={[
+                                    styles.paymentButtonText,
+                                    paymentMethod === 'card' && styles.paymentButtonTextActive,
+                                ]}>Card</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.paymentButton,
+                                    paymentMethod === 'upi' && styles.paymentButtonActive,
+                                ]}
+                                onPress={() => setPaymentMethod('upi')}
+                            >
+                                <Ionicons
+                                    name="phone-portrait"
+                                    size={20}
+                                    color={paymentMethod === 'upi' ? colors.textWhite : colors.primary}
+                                />
+                                <Text style={[
+                                    styles.paymentButtonText,
+                                    paymentMethod === 'upi' && styles.paymentButtonTextActive,
+                                ]}>UPI</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.cancelButton]}
+                                onPress={() => setIsAddFundsVisible(false)}
+                            >
+                                <Text style={styles.cancelButtonText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.confirmButton]}
+                                onPress={handleAddFunds}
+                                disabled={loading}
+                            >
+                                <Text style={styles.confirmButtonText}>
+                                    {loading ? 'Processing...' : 'Add Funds'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </View>
     );
 };
 
@@ -240,20 +317,36 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: spacing.sm,
         marginTop: spacing.md,
+        color: colors.text
     },
-    amountInput: {
-        backgroundColor: colors.background,
-        borderRadius: borderRadius.md,
-        padding: spacing.md,
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: colors.text,
+    input: {
+        backgroundColor: colors.surface,
         borderWidth: 1,
         borderColor: colors.border,
+        borderRadius: borderRadius.md,
+        padding: spacing.md,
+        fontSize: 18,
+        color: colors.text,
+    },
+    addFundsMainButton: {
+        backgroundColor: colors.primary,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: spacing.md,
+        borderRadius: borderRadius.md,
+        ...shadows.sm
+    },
+    addFundsMainButtonText: {
+        ...typography.button,
+        color: colors.textWhite,
+        marginLeft: spacing.sm,
+        fontWeight: 'bold'
     },
     quickAmounts: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginBottom: spacing.md
     },
     quickButton: {
         flex: 1,
@@ -273,6 +366,7 @@ const styles = StyleSheet.create({
     paymentMethods: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        marginBottom: spacing.lg
     },
     paymentButton: {
         flex: 1,
@@ -298,17 +392,53 @@ const styles = StyleSheet.create({
     paymentButtonTextActive: {
         color: colors.textWhite,
     },
-    addButton: {
-        backgroundColor: colors.primary,
-        borderRadius: borderRadius.md,
-        padding: spacing.md,
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginTop: spacing.md,
-        ...shadows.md,
     },
-    addButtonText: {
-        ...typography.button,
+    modalContent: {
+        backgroundColor: colors.surface,
+        borderRadius: borderRadius.lg,
+        padding: spacing.lg,
+        width: '90%',
+        ...shadows.lg,
+        maxHeight: '80%'
+    },
+    modalTitle: {
+        ...typography.h3,
+        marginBottom: spacing.md,
+        textAlign: 'center',
+    },
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: spacing.lg
+    },
+    modalButton: {
+        flex: 1,
+        padding: spacing.md,
+        borderRadius: borderRadius.md,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        marginRight: spacing.sm,
+    },
+    confirmButton: {
+        backgroundColor: colors.primary,
+        marginLeft: spacing.sm,
+    },
+    cancelButtonText: {
+        color: colors.text,
+        fontWeight: '600',
+    },
+    confirmButtonText: {
         color: colors.textWhite,
+        fontWeight: '600',
     },
     filtersContainer: {
         marginBottom: spacing.md,

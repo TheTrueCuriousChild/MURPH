@@ -28,7 +28,7 @@ const userLogin = async (req, res) => {
         maxAge: 15 * 60 * 1000
     });
 
-    res.sendResponse(200, true, "User login successful.")
+    res.sendResponse(200, true, "User login successful.", { token, user })
 };
 
 const userLogout = (req, res) => {
@@ -49,7 +49,16 @@ const userSignup = async (req, res) => {
         const user = await prisma.user.create({
             data: { username, email, password: hashedPassword }
         });
-        res.sendResponse(201, true, "User registered successfully", user);
+        const token = generateAccessToken("user", user.email);
+
+        res.cookie("accessToken", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 15 * 60 * 1000
+        });
+
+        res.sendResponse(201, true, "User registered successfully", { token, user });
     } catch (error) {
         res.sendResponse(500, false, "Failed to register user", { error: error.message });
     }
@@ -64,7 +73,16 @@ const teacherSignup = async (req, res) => {
         const teacher = await prisma.teacher.create({
             data: { username, email, password: hashedPassword }
         });
-        res.sendResponse(201, true, "Teacher registered successfully", teacher);
+        const token = generateAccessToken("teacher", teacher.email);
+
+        res.cookie("accessToken", token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 15 * 60 * 1000
+        });
+
+        res.sendResponse(201, true, "Teacher registered successfully", { token, teacher });
     } catch (error) {
         res.sendResponse(500, false, "Failed to register teacher", { error: error.message });
     }
@@ -96,7 +114,7 @@ const teacherLogin = async (req, res) => {
         maxAge: 15 * 60 * 1000
     });
 
-    res.sendResponse(200, true, "Teacher login successful.")
+    res.sendResponse(200, true, "Teacher login successful.", { token, teacher })
 };
 
 const addFunds = async (req, res) => {
