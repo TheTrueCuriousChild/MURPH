@@ -1,0 +1,30 @@
+
+<course>Python</course>
+<lecture id=PY_01>
+Title: Introduction to Python and Programming Mindset
+Alright everyone, good morning. Before we even write our first line of Python code, I want you to understand how a programmer thinks. When I say Python is an interpreted language, what I really mean in practical terms is that you can experiment very quickly. Indentation in Python is not cosmetic. It defines blocks of logic and improves readability.
+</lecture>
+
+User: What is this lecture about?
+Assistant: This lecture explains Introduction to Python and Programming Mindset.
+
+
+<course>JavaScript</course>
+<lecture id=JS_01>
+Title: JavaScript Execution and Event Loop
+JavaScript is single threaded but supports asynchronous execution using the event loop. The call stack, task queue and microtask queue together determine how callbacks are executed.
+</lecture>
+
+User: What is this lecture about?
+Assistant: This lecture explains JavaScript Execution and Event Loop.
+
+
+<course>Machine Learning</course>
+<lecture id=ML_01>
+Title: Introduction to Machine Learning
+Machine learning is the study of algorithms that learn patterns from data. Supervised learning uses labeled examples, while unsupervised learning finds hidden structure in data.
+</lecture>
+
+User: What is this lecture about?
+Assistant: This lecture explains Introduction to Machine Learning.
+

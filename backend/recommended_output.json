@@ -1,0 +1,41 @@
+{
+  "query": "Machine Learning",
+  "recommended_lectures": [
+    {
+      "lecture": "Introduction to Python and Programming Mindset",
+      "faculty": "Unknown Faculty",
+      "checklist": [
+        "python",
+        "alright",
+        "everyone",
+        "good",
+        "morning",
+        "before"
+      ]
+    },
+    {
+      "lecture": "JavaScript Execution and Event Loop",
+      "faculty": "Unknown Faculty",
+      "checklist": [
+        "queue",
+        "javascript",
+        "single",
+        "threaded",
+        "supports",
+        "asynchronous"
+      ]
+    },
+    {
+      "lecture": "Introduction to Machine Learning",
+      "faculty": "Unknown Faculty",
+      "checklist": [
+        "learning",
+        "data",
+        "machine",
+        "study",
+        "algorithms",
+        "learn"
+      ]
+    }
+  ]
+}
