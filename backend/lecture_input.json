@@ -1,0 +1,5 @@
+{
+    "lecture_id": "L2001",
+    "title": "Transformer Architecture for LLMs",
+    "lecture_text": "Transformers are neural network architectures based on self-attention mechanisms. They replace recurrence with parallel attention layers. The main components include embeddings, positional encodings, multi-head self-attention, feed-forward layers, residual connections, and layer normalization. The attention mechanism computes weighted combinations of token representations using queries, keys, and values."
+}
