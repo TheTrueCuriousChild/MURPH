@@ -12,6 +12,7 @@ import {
     getCourseLectures,
     updateLecture,
     deleteLecture,
+    previewLecture,
 } from "../controllers/lecture.controllers.js";
 import { getTeacherAnalytics } from "../controllers/analytics.controllers.js";
 import authMiddleware from "../middlewares/auth.js";
@@ -40,6 +41,7 @@ router.post("/lectures", uploadSingle("lecture"), addLecture);
 router.get("/courses/:courseId/lectures", getCourseLectures);
 router.put("/lectures/:id", updateLecture);
 router.delete("/lectures/:id", deleteLecture);
+router.get("/lectures/:id/preview", previewLecture);
 
 // Analytics
 router.get("/analytics", getTeacherAnalytics);

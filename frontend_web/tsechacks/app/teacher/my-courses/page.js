@@ -23,8 +23,22 @@ export default function MyCoursesPage() {
                 });
                 const data = await response.json();
 
+                console.log(data);
+
                 if (data.success) {
                     setCourses(data.data);
+                } else {
+                    if (response.status === 401) {
+                        // Token expired or invalid
+                        if (typeof window !== 'undefined') {
+                            localStorage.removeItem('accessToken');
+                            localStorage.removeItem('isAuthenticated');
+                            localStorage.removeItem('userRole');
+                        }
+                        router.push('/login');
+                        return;
+                    }
+                    console.error('Failed to fetch courses:', data.message);
                 }
             } catch (error) {
                 console.error('Fetch courses error:', error);
@@ -89,9 +103,12 @@ export default function MyCoursesPage() {
                                 {course.description}
                             </p>
                             <div className="border-t border-secondary-100 pt-4 flex justify-end">
-                                <button className="text-primary-600 font-medium hover:text-primary-700 text-sm">
+                                <Link
+                                    href={`/teacher/my-courses/${course.id}`}
+                                    className="text-primary-600 font-medium hover:text-primary-700 text-sm"
+                                >
                                     View Details →
-                                </button>
+                                </Link>
                             </div>
                         </div>
                     ))}

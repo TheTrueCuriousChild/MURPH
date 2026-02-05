@@ -26,6 +26,8 @@ import UploadContentScreen from '../screens/UploadContentScreen';
 import VideoPlayerScreen from '../screens/VideoPlayerScreen';
 import CreateCourseScreen from '../screens/CreateCourseScreen';
 import TeacherMyCoursesScreen from '../screens/TeacherMyCoursesScreen';
+import TeacherCourseDetailsScreen from '../screens/TeacherCourseDetailsScreen';
+import StudentCourseDetailsScreen from '../screens/StudentCourseDetailsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -213,6 +215,12 @@ const AppNavigator = () => {
                         )}
 
                         <Stack.Screen
+                            name="StudentCourseDetails"
+                            component={StudentCourseDetailsScreen}
+                            options={{ headerShown: false }}
+                        />
+
+                        <Stack.Screen
                             name="Profile"
                             component={ProfileScreen}
                             options={{
@@ -239,6 +247,14 @@ const AppNavigator = () => {
                             component={CreateCourseScreen}
                             options={{
                                 title: 'Create Course',
+                            }}
+                        />
+                        <Stack.Screen
+                            name="TeacherCourseDetails"
+                            component={TeacherCourseDetailsScreen}
+                            options={{
+                                title: 'Course Details',
+                                headerShown: false,
                             }}
                         />
                         <Stack.Screen

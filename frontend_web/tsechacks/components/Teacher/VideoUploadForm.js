@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { HiCloudArrowUp, HiXMark } from 'react-icons/hi2';
 import { API_URL } from '@/lib/config';
 
-export default function VideoUploadForm() {
+export default function VideoUploadForm({ preSelectedCourseId }) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [dragActive, setDragActive] = useState(false);
@@ -17,7 +17,7 @@ export default function VideoUploadForm() {
         description: '',
         pricePerMinute: '',
         category: '',
-        courseId: '',
+        courseId: preSelectedCourseId || '',
         tags: '',
         videoFile: null,
         thumbnailFile: null

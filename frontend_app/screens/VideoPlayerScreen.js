@@ -18,9 +18,22 @@ import { colors, typography, spacing, borderRadius } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
 
+// Mock Data for Preview Mode
+const MOCK_QA = [
+    { id: 1, user: 'John Doe', question: 'Can you explain the last part again?', answer: 'Sure! The key concept is...', date: '2h ago' },
+    { id: 2, user: 'Alice Smith', question: 'Is this applicable to React Native?', answer: 'Yes, the same principles apply.', date: '5h ago' },
+];
+
+const MOCK_REVIEWS = [
+    { id: 1, user: 'Mike Ross', rating: 5, comment: 'Excellent explanation!', date: '1d ago' },
+    { id: 2, user: 'Rachel Green', rating: 4, comment: 'Good, but a bit fast.', date: '2d ago' },
+];
+
 const VideoPlayerScreen = ({ route, navigation }) => {
     // Expect lectureId and other details from route params
     const { lectureId, title, description, courseId } = route.params || {};
+
+    console.log("VideoPlayerScreen Params:", JSON.stringify(route.params, null, 2));
 
     const videoRef = useRef(null);
     const { token, user } = useAuth();
@@ -30,15 +43,23 @@ const VideoPlayerScreen = ({ route, navigation }) => {
     const [loading, setLoading] = useState(true);
     const [videoUrl, setVideoUrl] = useState(null);
     const [isSessionActive, setIsSessionActive] = useState(false);
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'qa', 'reviews'
 
     // Initialize Session
     useEffect(() => {
         let mounted = true;
 
         const initializeSession = async () => {
-            if (!lectureId) {
-                Alert.alert("Error", "No lecture specified");
+            if (!lectureId && !route.params?.videoUrl) {
+                Alert.alert("Error", "No video specified");
                 navigation.goBack();
+                return;
+            }
+
+            // Direct Playback Mode (Preview)
+            if (route.params?.videoUrl) {
+                setVideoUrl(route.params.videoUrl);
+                setLoading(false);
                 return;
             }
 
@@ -217,7 +238,9 @@ const VideoPlayerScreen = ({ route, navigation }) => {
                     style={styles.video}
                     source={{
                         uri: videoUrl,
-                        headers: { 'Authorization': `Bearer ${token}` } // Send auth token for stream
+                        headers: videoUrl && videoUrl.includes(API_URL)
+                            ? { 'Authorization': `Bearer ${token}` }
+                            : undefined // Do not send headers for Signed S3 URLs
                     }}
                     useNativeControls
                     resizeMode={ResizeMode.CONTAIN}
@@ -227,25 +250,95 @@ const VideoPlayerScreen = ({ route, navigation }) => {
                 />
             </View>
 
-            {/* Info Section */}
-            <View style={styles.infoContainer}>
-                <Text style={styles.title}>{title}</Text>
-                <Text style={styles.description}>{description}</Text>
-
-                <View style={styles.statusBadge}>
-                    <View style={[styles.dot, { backgroundColor: colors.success }]} />
-                    <Text style={styles.statusText}>Session Active</Text>
-                </View>
-
-                <Text style={styles.note}>
-                    You are currently being billed for this session.
-                    Pause the video to pause billing.
-                    End the session to finalize payment.
-                </Text>
-
-                <TouchableOpacity style={styles.endButton} onPress={handleEndSession}>
-                    <Text style={styles.endButtonText}>End Session</Text>
+            {/* Tabs Header */}
+            <View style={styles.tabHeader}>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'overview' && styles.activeTabItem]}
+                    onPress={() => setActiveTab('overview')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Overview</Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'qa' && styles.activeTabItem]}
+                    onPress={() => setActiveTab('qa')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'qa' && styles.activeTabText]}>Q&A</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.tabItem, activeTab === 'reviews' && styles.activeTabItem]}
+                    onPress={() => setActiveTab('reviews')}
+                >
+                    <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>Reviews</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* Tab Content */}
+            <View style={styles.infoContainer}>
+                {activeTab === 'overview' && (
+                    <>
+                        {/* DEBUG INFO: Remove before production */}
+                        <View style={{ padding: 10, backgroundColor: '#333' }}>
+                            <Text style={{ color: '#EEE', fontSize: 10, fontFamily: 'monospace' }}>
+                                URL: {videoUrl ? (videoUrl.length > 50 ? videoUrl.substring(0, 50) + '...' : videoUrl) : 'None'}
+                            </Text>
+                        </View>
+
+                        <Text style={styles.title}>{title}</Text>
+                        <Text style={styles.description}>{description}</Text>
+
+                        <View style={styles.statusBadge}>
+                            <View style={[styles.dot, { backgroundColor: isSessionActive ? colors.success : colors.warning }]} />
+                            <Text style={styles.statusText}>{isSessionActive ? 'Session Active' : 'Session Paused'}</Text>
+                        </View>
+
+                        {sessionId && (
+                            <>
+                                <Text style={styles.note}>
+                                    You are currently being billed for this session.
+                                    Pause the video to pause billing.
+                                    End the session to finalize payment.
+                                </Text>
+
+                                <TouchableOpacity style={styles.endButton} onPress={handleEndSession}>
+                                    <Text style={styles.endButtonText}>End Session</Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </>
+                )}
+
+                {activeTab === 'qa' && (
+                    <View>
+                        {MOCK_QA.map(item => (
+                            <View key={item.id} style={styles.qaItem}>
+                                <View style={styles.qaHeader}>
+                                    <Text style={styles.qaUser}>{item.user}</Text>
+                                    <Text style={styles.qaDate}>{item.date}</Text>
+                                </View>
+                                <Text style={styles.qaQuestion}>Q: {item.question}</Text>
+                                <Text style={styles.qaAnswer}>A: {item.answer}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+
+                {activeTab === 'reviews' && (
+                    <View>
+                        {MOCK_REVIEWS.map(item => (
+                            <View key={item.id} style={styles.reviewItem}>
+                                <View style={styles.reviewHeader}>
+                                    <Text style={styles.reviewUser}>{item.user}</Text>
+                                    <View style={styles.ratingContainer}>
+                                        <Ionicons name="star" size={14} color="#FFD700" />
+                                        <Text style={styles.ratingText}>{item.rating}</Text>
+                                    </View>
+                                </View>
+                                <Text style={styles.reviewComment}>{item.comment}</Text>
+                                <Text style={styles.reviewDate}>{item.date}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
             </View>
         </SafeAreaView>
     );
@@ -351,6 +444,97 @@ const styles = StyleSheet.create({
     endButtonText: {
         ...typography.button,
         color: white,
+    },
+    // Tabs Styles
+    tabHeader: {
+        flexDirection: 'row',
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        backgroundColor: colors.surface,
+    },
+    tabItem: {
+        flex: 1,
+        paddingVertical: spacing.md,
+        alignItems: 'center',
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+    },
+    activeTabItem: {
+        borderBottomColor: colors.primary,
+    },
+    tabText: {
+        ...typography.button,
+        color: colors.textLight,
+    },
+    activeTabText: {
+        color: colors.primary,
+    },
+    // QA Styles
+    qaItem: {
+        marginBottom: spacing.md,
+        padding: spacing.sm,
+        backgroundColor: colors.surface,
+        borderRadius: borderRadius.sm,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    qaHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing.xs,
+    },
+    qaUser: {
+        fontWeight: 'bold',
+        color: colors.text,
+    },
+    qaDate: {
+        fontSize: 12,
+        color: colors.textLight,
+    },
+    qaQuestion: {
+        ...typography.body2,
+        color: colors.text,
+        fontWeight: '600',
+        marginBottom: 2,
+    },
+    qaAnswer: {
+        ...typography.body2,
+        color: colors.textLight,
+    },
+    // Review Styles
+    reviewItem: {
+        marginBottom: spacing.md,
+        padding: spacing.sm,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    reviewHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: spacing.xs,
+    },
+    reviewUser: {
+        fontWeight: 'bold',
+        color: colors.text,
+    },
+    ratingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    ratingText: {
+        fontWeight: 'bold',
+        color: colors.text,
+    },
+    reviewComment: {
+        ...typography.body2,
+        color: colors.text,
+        marginBottom: 4,
+    },
+    reviewDate: {
+        fontSize: 10,
+        color: colors.textLight,
     },
 });
 

@@ -29,13 +29,15 @@ export const AuthProvider = ({ children }) => {
                 // Construct minimal user object from inputs since backend doesn't return it
                 const userData = { email, role };
 
-                // Try to get token from headers if possible, otherwise leave null
-                // Note: React Native fetch might not expose Set-Cookie easily without specific networking libraries
-                // For now, we trust the success flag.
-                const setCookieHeader = response.headers.get('set-cookie');
-                if (setCookieHeader) {
-                    const match = setCookieHeader.match(/accessToken=([^;]+)/);
-                    if (match && match[1]) setToken(match[1]);
+                if (data.data && data.data.token) {
+                    setToken(data.data.token);
+                } else {
+                    // Fallback to cookie check if needed
+                    const setCookieHeader = response.headers.get('set-cookie');
+                    if (setCookieHeader) {
+                        const match = setCookieHeader.match(/accessToken=([^;]+)/);
+                        if (match && match[1]) setToken(match[1]);
+                    }
                 }
 
                 setUser(userData);

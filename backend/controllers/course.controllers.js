@@ -1,4 +1,5 @@
 import prisma from "../utils/prisma.js";
+import { getSignedVideoUrl } from "../utils/upload.js";
 
 export const createCourse = async (req, res) => {
   const { title, description } = req.body;
@@ -40,6 +41,9 @@ export const getCourseById = async (req, res) => {
   const { id } = req.params;
 
   try {
+    // Disable caching to ensure signed URLs are always fresh
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
     const course = await prisma.course.findUnique({
       where: { id },
       include: {
@@ -49,6 +53,27 @@ export const getCourseById = async (req, res) => {
 
     if (!course) {
       return res.sendResponse(404, false, "Course not found");
+    }
+
+    // Sign URLs for lectures if present
+    if (course.lectures && course.lectures.length > 0) {
+      console.log(`[getCourseById] Found ${course.lectures.length} lectures. Signing URLs...`);
+      course.lectures = await Promise.all(course.lectures.map(async (lecture) => {
+        if (lecture.videoUrl && !lecture.videoUrl.startsWith('http')) {
+          try {
+            console.log(`[getCourseById] Signing URL for lecture ${lecture.id} (Key: ${lecture.videoUrl})`);
+            const signedUrl = await getSignedVideoUrl(lecture.videoUrl);
+            console.log(`[getCourseById] Signed URL: ${signedUrl.substring(0, 50)}...`);
+            return { ...lecture, videoUrl: signedUrl };
+          } catch (e) {
+            console.error(`[getCourseById] Failed to sign URL for lecture ${lecture.id}:`, e);
+            return lecture;
+          }
+        }
+        return lecture;
+      }));
+    } else {
+      console.log("[getCourseById] No lectures found to sign.");
     }
 
     return res.sendResponse(200, true, "Course fetched successfully", course);

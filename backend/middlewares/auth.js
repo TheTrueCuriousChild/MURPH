@@ -7,13 +7,17 @@ const authMiddleware = (requiredRole) => {
         console.log("Cookies:", req.cookies);
         console.log("Headers:", req.headers);
 
-        let token = req.cookies?.accessToken;
+        let token = null;
 
-        if (!token && req.headers.authorization) {
+        if (req.headers.authorization) {
             const authHeader = req.headers.authorization;
             if (authHeader.startsWith("Bearer ")) {
                 token = authHeader.substring(7, authHeader.length);
             }
+        }
+
+        if (!token && req.cookies?.accessToken) {
+            token = req.cookies.accessToken;
         }
 
         console.log("Extracted Token:", token ? "Found" : "Missing");

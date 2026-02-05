@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -13,13 +13,45 @@ import { filterCourses } from '../utils/helpers';
 import BalanceCard from '../components/BalanceCard';
 import CourseCard from '../components/CourseCard';
 
-const MyCoursesScreen = ({ navigation }) => {
-    const { user } = useAuth();
-    const [filter, setFilter] = useState('all');
+import { API_URL } from '../constants/config';
 
-    const enrolledCourses = filterCourses(courses, 'enrolled');
-    const inProgressCourses = filterCourses(courses, 'in-progress');
-    const completedCourses = filterCourses(courses, 'completed');
+const MyCoursesScreen = ({ navigation }) => {
+    const { user, token } = useAuth();
+    const [filter, setFilter] = useState('all');
+    const [courses, setCourses] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchCourses = async () => {
+            try {
+                const response = await fetch(`${API_URL}/user/courses`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (data.success) {
+                    setCourses(data.data.map(c => ({
+                        ...c,
+                        instructor: c.teacher?.username || 'Instructor',
+                        totalSessions: c._count?.lectures || 0,
+                        thumbnail: 'https://via.placeholder.com/150',
+                        rating: 4.5,
+                        progress: 0,
+                        enrolled: true // Assume enrolled for now
+                    })));
+                }
+            } catch (error) {
+                console.error('Fetch courses error:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (token) fetchCourses();
+    }, [token]);
+
+    const enrolledCourses = courses;
+    const inProgressCourses = []; // Placeholder
+    const completedCourses = [];  // Placeholder
 
     const getFilteredCourses = () => {
         switch (filter) {
@@ -92,12 +124,7 @@ const MyCoursesScreen = ({ navigation }) => {
                             key={course.id}
                             course={course}
                             showProgress={true}
-                            onPress={() => navigation.navigate('VideoPlayer', {
-                                videoParams: {
-                                    title: course.title,
-                                    source: 'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4'
-                                }
-                            })}
+                            onPress={() => navigation.navigate('StudentCourseDetails', { courseId: course.id })}
                         />
                     ))}
                     {getFilteredCourses().length === 0 && (
