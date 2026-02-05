@@ -1,316 +1,521 @@
 import json
-import numpy as np
-
-# -------------------------
-# Model imports
-# -------------------------
-import lightgbm as lgb
-import xgboost as xgb
-
+import math
+import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+import sentencepiece as spm
+
+# -------------------------------------------------------
+# import your real recommender
+# -------------------------------------------------------
+from recommendation import run_lightgbm_ranker
 
 
-# ============================================================
-# Feature utilities
-# ============================================================
+# -------------------------------------------------------
+# CONFIG
+# -------------------------------------------------------
 
-def build_tabular_feature_vector(session, user):
+JSON_INPUT = "lectures.json"
+CORPUS_FILE = "corpus.txt"
+SP_MODEL = "micro.model"
+MODEL_FILE = "micro_llm.pt"
+OUTPUT_JSON = "recommended_output.json"
 
-    # -------------------------------------------------
-    # If new-style tabular_features exists → use it
-    # -------------------------------------------------
-    if "tabular_features" in session:
-        tf = session["tabular_features"]
+VOCAB_SIZE = 512
+BLOCK_SIZE = 64
+BATCH_SIZE = 4
+EPOCHS = 5
+LR = 3e-4
 
-        return np.array([
-            session.get("semantic_max", 0.0),
-            session.get("semantic_mean", 0.0),
-            session.get("semantic_hits", 0.0),
-
-            tf.get("avg_rating", 0.0),
-            tf.get("review_credibility", 1.0),
-            tf.get("difficulty_id", 0),
-            tf.get("category_match", 0),
-            tf.get("same_teacher_before", 0),
-
-            user.get("age_bucket", 0),
-            user.get("year_of_study", 0)
-        ], dtype=np.float32)
-
-    # -------------------------------------------------
-    # Otherwise → build features from your OLD dummy JSON
-    # -------------------------------------------------
-
-    # average rating from reviews
-    reviews = session.get("reviews", [])
-    if len(reviews) > 0:
-        avg_rating = sum(r.get("rating", 0) for r in reviews) / len(reviews)
-        avg_rating = avg_rating / 5.0
-    else:
-        avg_rating = 0.0
-
-    # difficulty id
-    diff_map = {
-        "beginner": 0,
-        "intermediate": 1,
-        "advanced": 2
-    }
-    difficulty_id = diff_map.get(session.get("difficulty", "").lower(), 0)
-
-    # category match
-    preferred = user.get("preferred_categories", [])
-    category_match = 1 if session.get("category") in preferred else 0
-
-    # same teacher before
-    prev_teachers = user.get("previous_teachers", [])
-    same_teacher_before = 1 if session.get("teacher_id") in prev_teachers else 0
-
-    return np.array([
-        session.get("semantic_max", 0.0),
-        session.get("semantic_mean", 0.0),
-        session.get("semantic_hits", 0.0),
-
-        avg_rating,
-        1.0,                    # review_credibility (dummy = 1 for now)
-        difficulty_id,
-        category_match,
-        same_teacher_before,
-
-        user.get("age_bucket", 0),
-        user.get("year_of_study", 0)
-    ], dtype=np.float32)
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+# -------------------------------------------------------
+# Build corpus
+# -------------------------------------------------------
 
-# temporary label (only for pipeline testing)
-# replace later with real engagement label
-def pseudo_label(session):
+def build_corpus_from_json():
 
-    # use tabular_features if present
-    if "tabular_features" in session:
-        r = float(session["tabular_features"].get("avg_rating", 0.0))
-    else:
-        reviews = session.get("reviews", [])
-        if not reviews:
-            r = 0.0
-        else:
-            r = sum(x.get("rating", 0) for x in reviews) / len(reviews) / 5.0
+    with open(JSON_INPUT, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    # ---- convert to integer relevance for LambdaMART ----
-    # r is in [0,1]  → convert to 0..4
-    return int(round(r * 4))
+    lines = []
 
+    for course in data["courses"]:
 
+        lines.append(f"\n<course>{course['course_name']}</course>\n")
 
-# ============================================================
-# 🥇 LightGBM LambdaMART
-# ============================================================
+        for lec in course["lectures"]:
 
-def run_lightgbm_ranker(input_json):
+            lines.append(f"<lecture id={lec['lecture_id']}>\n")
+            lines.append(f"Title: {lec['title']}\n")
+            lines.append(lec["transcript"].strip() + "\n")
+            lines.append("</lecture>\n\n")
 
-    user = input_json["user"]
-    sessions = input_json["sessions"]
+            lines.append("User: What is this lecture about?\n")
+            lines.append(f"Assistant: This lecture explains {lec['title']}.\n\n")
 
-    X, y = [], []
+    with open(CORPUS_FILE, "w", encoding="utf-8") as f:
+        f.write("".join(lines))
 
-    for s in sessions:
-        X.append(build_tabular_feature_vector(s, user))
-        y.append(pseudo_label(s))
-
-    X = np.vstack(X)
-    y = np.array(y)
-
-    group = [len(X)]
-
-    dset = lgb.Dataset(X, label=y, group=group)
-
-    params = {
-        "objective": "lambdarank",
-        "metric": "ndcg",
-        "ndcg_eval_at": [5, 10],
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "min_data_in_leaf": 5,
-        "verbosity": -1
-    }
-
-    model = lgb.train(params, dset, num_boost_round=80)
-
-    scores = model.predict(X)
-    return scores
+    print("Corpus built:", CORPUS_FILE)
 
 
-# ============================================================
-# 🥉 XGBoost ranking
-# ============================================================
+# -------------------------------------------------------
+# Tokenizer
+# -------------------------------------------------------
 
-def run_xgboost_ranker(input_json):
+def train_tokenizer_if_needed():
 
-    user = input_json["user"]
-    sessions = input_json["sessions"]
+    if os.path.exists(SP_MODEL):
+        print("Tokenizer already exists.")
+        return
 
-    X, y = [], []
+    print("Training tokenizer...")
 
-    for s in sessions:
-        X.append(build_tabular_feature_vector(s, user))
-        y.append(pseudo_label(s))
-
-    X = np.vstack(X)
-    y = np.array(y)
-
-    dtrain = xgb.DMatrix(X, label=y)
-    dtrain.set_group([len(X)])
-
-    params = {
-        "objective": "rank:ndcg",
-        "eta": 0.05,
-        "max_depth": 6,
-        "subsample": 0.9,
-        "colsample_bytree": 0.9,
-        "eval_metric": "ndcg@10"
-    }
-
-    model = xgb.train(params, dtrain, num_boost_round=100)
-
-    scores = model.predict(dtrain)
-    return scores
-
-
-# ============================================================
-# 🥈 Neural fusion ranker (MLP)
-# raw query embedding + content embedding + tabular
-# ============================================================
-
-class FusionRanker(nn.Module):
-
-    def __init__(self, emb_dim, tab_dim, hidden=64):
-        super().__init__()
-
-        self.semantic = nn.Sequential(
-            nn.Linear(emb_dim * 2, hidden),
-            nn.ReLU()
-        )
-
-        self.tabular = nn.Sequential(
-            nn.Linear(tab_dim, hidden),
-            nn.ReLU()
-        )
-
-        self.final = nn.Sequential(
-            nn.Linear(hidden * 2, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, 1)
-        )
-
-    def forward(self, q, c, t):
-        s = self.semantic(torch.cat([q, c], dim=1))
-        tb = self.tabular(t)
-        x = torch.cat([s, tb], dim=1)
-        return self.final(x).squeeze(1)
-
-
-def run_neural_fusion_ranker(input_json, epochs=300):
-
-    user = input_json["user"]
-    sessions = input_json["sessions"]
-
-    q_emb = np.asarray(input_json["query_embedding"], dtype=np.float32)
-
-    tab_X, cont_X, y = [], [], []
-
-    for s in sessions:
-        tab_X.append(build_tabular_feature_vector(s, user))
-        cont_X.append(np.asarray(s["content_embedding"], dtype=np.float32))
-        y.append(pseudo_label(s))
-
-    tab_X = torch.tensor(np.vstack(tab_X))
-    cont_X = torch.tensor(np.vstack(cont_X))
-    q_X = torch.tensor(np.repeat(q_emb[None, :], len(cont_X), axis=0))
-    y = torch.tensor(np.array(y), dtype=torch.float32)
-
-    model = FusionRanker(
-        emb_dim=q_X.shape[1],
-        tab_dim=tab_X.shape[1]
+    spm.SentencePieceTrainer.train(
+        input=CORPUS_FILE,
+        model_prefix="micro",
+        vocab_size=VOCAB_SIZE,
+        model_type="bpe",
+        hard_vocab_limit=False
     )
 
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_fn = nn.MSELoss()
+    print("Tokenizer trained.")
 
-    model.train()
-    for _ in range(epochs):
-        opt.zero_grad()
-        preds = model(q_X, cont_X, tab_X)
-        loss = loss_fn(preds, y)
-        loss.backward()
-        opt.step()
 
+# -------------------------------------------------------
+# Dataset
+# -------------------------------------------------------
+
+class TextDataset(Dataset):
+
+    def __init__(self, text_file, sp_model, block_size):
+
+        self.sp = spm.SentencePieceProcessor(model_file=sp_model)
+
+        with open(text_file, "r", encoding="utf-8") as f:
+            text = f.read()
+
+        ids = self.sp.encode(text)
+        self.data = torch.tensor(ids, dtype=torch.long)
+
+        self.block_size = min(block_size, len(self.data) - 1)
+
+        if self.block_size < 2:
+            raise RuntimeError("Corpus too small.")
+
+    def __len__(self):
+        return max(0, len(self.data) - self.block_size)
+
+    def __getitem__(self, idx):
+
+        x = self.data[idx:idx + self.block_size]
+        y = self.data[idx + 1:idx + self.block_size + 1]
+        return x, y
+
+
+# -------------------------------------------------------
+# Transformer
+# -------------------------------------------------------
+
+class MultiHeadSelfAttention(nn.Module):
+
+    def __init__(self, d_model, n_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % n_heads == 0
+
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+        self.qkv = nn.Linear(d_model, 3 * d_model)
+        self.out = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask):
+
+        B, T, C = x.shape
+
+        qkv = self.qkv(x)
+        q, k, v = qkv.chunk(3, dim=-1)
+
+        q = q.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        k = k.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+        v = v.view(B, T, self.n_heads, self.head_dim).transpose(1, 2)
+
+        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        scores = scores.masked_fill(mask == 0, -1e9)
+
+        att = torch.softmax(scores, dim=-1)
+        att = self.dropout(att)
+
+        out = att @ v
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
+
+        return self.out(out)
+
+
+class TransformerBlock(nn.Module):
+
+    def __init__(self, d_model, n_heads, ffn_dim, dropout=0.1):
+        super().__init__()
+
+        self.ln1 = nn.LayerNorm(d_model)
+        self.attn = MultiHeadSelfAttention(d_model, n_heads, dropout)
+
+        self.ln2 = nn.LayerNorm(d_model)
+        self.ffn = nn.Sequential(
+            nn.Linear(d_model, ffn_dim),
+            nn.GELU(),
+            nn.Linear(ffn_dim, d_model),
+            nn.Dropout(dropout)
+        )
+
+    def forward(self, x, mask):
+        x = x + self.attn(self.ln1(x), mask)
+        x = x + self.ffn(self.ln2(x))
+        return x
+
+
+class MicroLanguageModel(nn.Module):
+
+    def __init__(
+        self,
+        vocab_size,
+        max_seq_len,
+        d_model=256,
+        n_layers=4,
+        n_heads=4,
+        ffn_dim=1024,
+        dropout=0.1
+    ):
+        super().__init__()
+
+        self.token_emb = nn.Embedding(vocab_size, d_model)
+        self.pos_emb = nn.Embedding(max_seq_len, d_model)
+
+        self.blocks = nn.ModuleList([
+            TransformerBlock(d_model, n_heads, ffn_dim, dropout)
+            for _ in range(n_layers)
+        ])
+
+        self.ln = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, vocab_size)
+
+    def forward(self, x):
+
+        B, T = x.shape
+        pos = torch.arange(T, device=x.device)
+
+        h = self.token_emb(x) + self.pos_emb(pos)
+
+        mask = torch.tril(torch.ones(T, T, device=x.device)).view(1, 1, T, T)
+
+        for blk in self.blocks:
+            h = blk(h, mask)
+
+        h = self.ln(h)
+        return self.head(h)
+
+
+# -------------------------------------------------------
+# Training
+# -------------------------------------------------------
+
+def train_model():
+
+    sp = spm.SentencePieceProcessor(model_file=SP_MODEL)
+    vocab_size = sp.get_piece_size()
+
+    dataset = TextDataset(CORPUS_FILE, SP_MODEL, BLOCK_SIZE)
+
+    loader = DataLoader(
+        dataset,
+        batch_size=min(BATCH_SIZE, len(dataset)),
+        shuffle=True
+    )
+
+    model = MicroLanguageModel(
+        vocab_size=vocab_size,
+        max_seq_len=dataset.block_size
+    ).to(DEVICE)
+
+    opt = torch.optim.AdamW(model.parameters(), lr=LR)
+
+    for epoch in range(EPOCHS):
+
+        model.train()
+        total = 0.0
+
+        for x, y in loader:
+
+            x = x.to(DEVICE)
+            y = y.to(DEVICE)
+
+            logits = model(x)
+
+            loss = F.cross_entropy(
+                logits.view(-1, vocab_size),
+                y.view(-1)
+            )
+
+            opt.zero_grad()
+            loss.backward()
+            opt.step()
+
+            total += loss.item()
+
+        print(f"Epoch {epoch+1} | loss = {total / len(loader):.4f}")
+
+    torch.save(model.state_dict(), MODEL_FILE)
+    print("Model saved:", MODEL_FILE)
+
+
+# -------------------------------------------------------
+# Inference helpers
+# -------------------------------------------------------
+
+def load_model_for_inference():
+
+    sp = spm.SentencePieceProcessor(model_file=SP_MODEL)
+    vocab_size = sp.get_piece_size()
+
+    model = MicroLanguageModel(
+        vocab_size=vocab_size,
+        max_seq_len=BLOCK_SIZE
+    ).to(DEVICE)
+
+    model.load_state_dict(torch.load(MODEL_FILE, map_location=DEVICE))
     model.eval()
-    with torch.no_grad():
-        scores = model(q_X, cont_X, tab_X).cpu().numpy()
 
-    return scores
+    return model, sp
 
 
-# ============================================================
-# Output builder (same JSON contract as before)
-# ============================================================
+def generate_text(model, sp, prompt, max_new_tokens=120, temperature=0.7):
 
-def build_output_json(input_json, scores):
+    ids = sp.encode(prompt)
+    x = torch.tensor(ids, dtype=torch.long, device=DEVICE)[None, :]
+
+    for _ in range(max_new_tokens):
+
+        x_cond = x[:, -BLOCK_SIZE:]
+
+        with torch.no_grad():
+            logits = model(x_cond)
+
+        logits = logits[:, -1, :] / temperature
+        probs = torch.softmax(logits, dim=-1)
+
+        next_id = torch.multinomial(probs, 1)
+        x = torch.cat([x, next_id], dim=1)
+
+    return sp.decode(x[0].tolist())
+
+
+# -------------------------------------------------------
+# REAL recommender adapter (query-aware)
+# -------------------------------------------------------
+
+def real_recommender_from_ranker(user_query, top_k=3):
+
+    with open(JSON_INPUT, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    def overlap_score(q, t):
+        q = set(w.lower() for w in q.split() if len(w) > 2)
+        t = set(w.lower() for w in t.split() if len(w) > 2)
+        return len(q & t)
+
+    sessions = []
+    session_to_lecture = {}
+
+    sid = 0
+
+    for course in data["courses"]:
+        for lec in course["lectures"]:
+
+            session_id = f"s{sid}"
+            sid += 1
+
+            text = (
+                course["course_name"] + " " +
+                lec["title"] + " " +
+                lec["transcript"]
+            )
+
+            hits = overlap_score(user_query, text)
+
+            sessions.append({
+                "session_id": session_id,
+                "title": lec["title"],
+                "teacher_id": lec.get("faculty", "unknown"),
+                "price_per_min": 0.0,
+
+                # inject query signal
+                "semantic_max": float(hits),
+                "semantic_mean": float(hits),
+                "semantic_hits": float(hits),
+
+                "reviews": [],
+                "difficulty": "beginner",
+                "category": course["course_name"],
+                "content_embedding": [0.0] * 32
+            })
+
+            session_to_lecture[session_id] = lec["lecture_id"]
+
+    input_json = {
+        "query": user_query,
+        "query_embedding": [0.0] * 32,
+        "user": {
+            "user_id": "student_1",
+            "age_bucket": 2,
+            "year_of_study": 2,
+            "preferred_categories": [],
+            "previous_teachers": []
+        },
+        "sessions": sessions
+    }
+
+    scores = run_lightgbm_ranker(input_json)
+
+    ranked = sorted(
+        zip(sessions, scores),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    lecture_ids = []
+    for s, _ in ranked[:top_k]:
+        lecture_ids.append(session_to_lecture[s["session_id"]])
+
+    return lecture_ids
+
+
+# -------------------------------------------------------
+# Lecture objects
+# -------------------------------------------------------
+
+def build_recommended_lecture_objects(lecture_ids):
+
+    with open(JSON_INPUT, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    out = []
+
+    for course in data["courses"]:
+        for lec in course["lectures"]:
+            if lec["lecture_id"] in lecture_ids:
+                out.append({
+                    "lecture_id": lec["lecture_id"],
+                    "title": lec["title"],
+                    "faculty": lec.get("faculty", "Unknown Faculty"),
+                    "course": course["course_name"],
+                    "transcript": lec["transcript"]
+                })
+
+    return out
+
+
+# -------------------------------------------------------
+# Checklist extraction
+# -------------------------------------------------------
+
+def extract_checklists(recommended_lectures):
+
+    model, sp = load_model_for_inference()
+
+    bad_words = {
+        "alright","everyone","good","morning","today","before",
+        "okay","ok","welcome","hello","thanks","thank","sir"
+    }
 
     results = []
 
-    for s, sc in zip(input_json["sessions"], scores):
+    for lec in recommended_lectures:
+
+        prompt = (
+            "Extract a short checklist of topics covered in the lecture below.\n"
+            "Rules:\n"
+            "- only bullet points\n"
+            "- 2 to 6 words per bullet\n"
+            "- no full sentences\n\n"
+            f"Lecture title: {lec['title']}\n\n"
+            f"Transcript:\n{lec['transcript']}\n\n"
+            "Checklist:\n- "
+        )
+
+        raw = generate_text(model, sp, prompt)
+
+        checklist = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("-"):
+                checklist.append(line.lstrip("-").strip())
+
+        if not checklist:
+            checklist = [x.strip() for x in raw.split(",") if x.strip()]
+
+        cleaned = []
+        for x in checklist:
+            w = x.lower().strip()
+            if w and w not in bad_words and len(w) > 2:
+                cleaned.append(x)
+
         results.append({
-            "session_id": s["session_id"],
-            "title": s["title"],
-            "teacher_id": s["teacher_id"],
-            "price_per_min": s["price_per_min"],
-            "rank_score": float(sc)
+            "lecture": lec["title"],
+            "faculty": lec["faculty"],
+            "course": lec["course"],
+            "checklist": cleaned[:8]
         })
 
-    results.sort(key=lambda x: x["rank_score"], reverse=True)
-
-    return {
-        "query": input_json["query"],
-        "user_id": input_json["user"]["user_id"],
-        "results": results
-    }
+    return results
 
 
-# ============================================================
-# Main runner
-# ============================================================
+# -------------------------------------------------------
+# Main conversational loop
+# -------------------------------------------------------
 
 if __name__ == "__main__":
 
-    INPUT_FILE = "input.json"
-    OUTPUT_FILE = "output.json"
+    build_corpus_from_json()
+    train_tokenizer_if_needed()
 
-    # Choose model:
-    # "lightgbm", "xgboost", "neural"
-    MODEL = "lightgbm"
+    if not os.path.exists(MODEL_FILE):
+        train_model()
 
-    with open(INPUT_FILE, "r", encoding="utf-8") as f:
-        input_json = json.load(f)
+    print("\nMicro course assistant is ready.")
+    print("Ask what you want to study. Type 'exit' to quit.\n")
 
-    if MODEL == "lightgbm":
-        scores = run_lightgbm_ranker(input_json)
+    while True:
 
-    elif MODEL == "xgboost":
-        scores = run_xgboost_ranker(input_json)
+        user_query = input("Student: ").strip()
 
-    elif MODEL == "neural":
-        scores = run_neural_fusion_ranker(input_json)
+        if user_query.lower() in ["exit", "quit"]:
+            break
 
-    else:
-        raise ValueError("Unknown model type")
+        lecture_ids = real_recommender_from_ranker(user_query, top_k=3)
 
-    output = build_output_json(input_json, scores)
+        lecture_objs = build_recommended_lecture_objects(lecture_ids)
 
-    print(json.dumps(output, indent=2))
+        checklist_output = extract_checklists(lecture_objs)
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
+        print("\nRecommended lectures:\n")
 
-    print("\nSaved:", OUTPUT_FILE)
+        for item in checklist_output:
+            print(f"{item['lecture']} by {item['faculty']}")
+            print("here is a checklist of topics")
+            for t in item["checklist"]:
+                print(t)
+            print()
+
+        export = {
+            "query": user_query,
+            "recommended_lectures": checklist_output
+        }
+
+        with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+            json.dump(export, f, indent=2, ensure_ascii=False)
+
+        print("Saved JSON:", OUTPUT_JSON, "\n")

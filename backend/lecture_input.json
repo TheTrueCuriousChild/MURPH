@@ -1,5 +1,37 @@
 {
-    "lecture_id": "L2001",
-    "title": "Transformer Architecture for LLMs",
-    "lecture_text": "Transformers are neural network architectures based on self-attention mechanisms. They replace recurrence with parallel attention layers. The main components include embeddings, positional encodings, multi-head self-attention, feed-forward layers, residual connections, and layer normalization. The attention mechanism computes weighted combinations of token representations using queries, keys, and values."
+    "courses": [
+        {
+            "course_id": "C_PY",
+            "course_name": "Python",
+            "lectures": [
+                {
+                    "lecture_id": "PY_01",
+                    "title": "Introduction to Python and Programming Mindset",
+                    "transcript": "Alright everyone, good morning. Before we even write our first line of Python code, I want you to understand how a programmer thinks. When I say Python is an interpreted language, what I really mean in practical terms is that you can experiment very quickly. Indentation in Python is not cosmetic. It defines blocks of logic and improves readability."
+                }
+            ]
+        },
+        {
+            "course_id": "C_JS",
+            "course_name": "JavaScript",
+            "lectures": [
+                {
+                    "lecture_id": "JS_01",
+                    "title": "JavaScript Execution and Event Loop",
+                    "transcript": "JavaScript is single threaded but supports asynchronous execution using the event loop. The call stack, task queue and microtask queue together determine how callbacks are executed."
+                }
+            ]
+        },
+        {
+            "course_id": "C_ML",
+            "course_name": "Machine Learning",
+            "lectures": [
+                {
+                    "lecture_id": "ML_01",
+                    "title": "Introduction to Machine Learning",
+                    "transcript": "Machine learning is the study of algorithms that learn patterns from data. Supervised learning uses labeled examples, while unsupervised learning finds hidden structure in data."
+                }
+            ]
+        }
+    ]
 }
