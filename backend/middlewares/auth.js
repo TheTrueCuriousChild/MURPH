@@ -3,9 +3,6 @@ import { verifyToken } from "../utils/tokens.js";
 const authMiddleware = (requiredRole) => {
     return (req, res, next) => {
         // DEBUG LOGGING
-        console.log("Auth Middleware Hit");
-        console.log("Cookies:", req.cookies);
-        console.log("Headers:", req.headers);
 
         let token = null;
 
@@ -20,12 +17,15 @@ const authMiddleware = (requiredRole) => {
             token = req.cookies.accessToken;
         }
 
+<<<<<<< HEAD
         // Allow token via query param (useful for video streaming)
         if (!token && req.query?.token) {
             token = req.query.token;
         }
 
         console.log("Extracted Token:", token ? "Found" : "Missing");
+=======
+>>>>>>> 5c3546aa640bc7bbb66e32002bb794be9a46e5c4
 
         if (!token) {
             console.log("Auth failed: No token");
@@ -33,7 +33,6 @@ const authMiddleware = (requiredRole) => {
         }
 
         const result = verifyToken(requiredRole, token);
-        console.log("Token Verification Result:", result);
 
         if (!result.valid) {
             console.log("Auth failed:", result.reason);
