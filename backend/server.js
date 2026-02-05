@@ -4,6 +4,7 @@ import dotenv from "dotenv"
 import userRouter from "./routes/user.routes.js"
 import teacherRouter from "./routes/teacher.routes.js"
 import sessionRouter from "./routes/session.routes.js"
+import aiRouter from "./routes/ai.routes.js"
 import responseFormatter from "./middlewares/response.js"
 import cors from "cors"
 
@@ -19,6 +20,7 @@ app.use(responseFormatter);
 app.use("/user", userRouter);
 app.use("/teacher", teacherRouter);
 app.use("/session", sessionRouter);
+app.use("/ai", aiRouter);
 
 app.get("/", (req, res) => {
     res.send("Hello World!");

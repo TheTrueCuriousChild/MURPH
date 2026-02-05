@@ -3,9 +3,6 @@ import { verifyToken } from "../utils/tokens.js";
 const authMiddleware = (requiredRole) => {
     return (req, res, next) => {
         // DEBUG LOGGING
-        console.log("Auth Middleware Hit");
-        console.log("Cookies:", req.cookies);
-        console.log("Headers:", req.headers);
 
         let token = req.cookies?.accessToken;
 
@@ -16,7 +13,6 @@ const authMiddleware = (requiredRole) => {
             }
         }
 
-        console.log("Extracted Token:", token ? "Found" : "Missing");
 
         if (!token) {
             console.log("Auth failed: No token");
@@ -24,7 +20,6 @@ const authMiddleware = (requiredRole) => {
         }
 
         const result = verifyToken(requiredRole, token);
-        console.log("Token Verification Result:", result);
 
         if (!result.valid) {
             console.log("Auth failed:", result.reason);
